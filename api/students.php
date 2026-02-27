@@ -20,8 +20,10 @@ $schoolId = current_school_id();
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'GET') {
+    $hasIndexNo = (bool) ($conn->query("SHOW COLUMNS FROM students LIKE 'index_no'")->num_rows ?? 0);
+    $idCol = $hasIndexNo ? 'index_no' : 'admission_no';
     $stmt = $conn->prepare(
-        "SELECT id, first_name, last_name, admission_no, gender, phone
+        "SELECT id, first_name, last_name, {$idCol} AS index_no, gender, phone
          FROM students WHERE school_id = ? ORDER BY created_at DESC"
     );
     $stmt->bind_param('i', $schoolId);
