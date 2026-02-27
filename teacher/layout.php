@@ -10,6 +10,37 @@ $conn       = get_db_connection();
 $schoolId   = current_school_id();
 $schoolName = 'Axis SMS';
 
+// Logged-in teacher details (from users table)
+$teacherName    = 'Teacher';
+$teacherEmail   = '';
+$teacherInitial = 'T';
+
+if (isset($_SESSION['user_id'], $_SESSION['school_id'])) {
+    $userId    = (int) $_SESSION['user_id'];
+    $userSchId = (int) $_SESSION['school_id'];
+
+    $stmt = $conn->prepare("SELECT full_name, email FROM users WHERE id = ? AND school_id = ? LIMIT 1");
+    if ($stmt) {
+        $stmt->bind_param('ii', $userId, $userSchId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($row = $res->fetch_assoc()) {
+            if (!empty($row['full_name'])) {
+                $teacherName = $row['full_name'];
+                // Use first letter of first word as avatar initial
+                $parts = preg_split('/\s+/', trim($row['full_name']));
+                if (!empty($parts[0])) {
+                    $teacherInitial = strtoupper(mb_substr($parts[0], 0, 1, 'UTF-8'));
+                }
+            }
+            if (!empty($row['email'])) {
+                $teacherEmail = $row['email'];
+            }
+        }
+        $stmt->close();
+    }
+}
+
 if ($schoolId) {
     $stmt = $conn->prepare("SELECT name FROM schools WHERE id = ?");
     $stmt->bind_param('i', $schoolId);
@@ -168,9 +199,66 @@ function teacherNavLink(string $check, string $current): string
         <header class="flex items-center justify-between px-6 py-3.5 border-b border-slate-200 bg-white">
             <h1 class="text-lg font-bold text-slate-900"><?= htmlspecialchars($page_title) ?></h1>
             <div class="flex items-center gap-3">
-                <span class="text-xs text-slate-500"><?= htmlspecialchars($schoolName) ?></span>
-                <div class="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-semibold">
-                    T
+                <!-- Message & notification icons -->
+                <button type="button"
+                        class="relative inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 focus:outline-none"
+                        aria-label="Messages">
+                    <i data-lucide="message-circle" class="w-4 h-4"></i>
+                    <span class="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-emerald-500 text-white text-[9px] font-semibold">
+                        2
+                    </span>
+                </button>
+                <button type="button"
+                        class="relative inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 focus:outline-none"
+                        aria-label="Notifications">
+                    <i data-lucide="bell" class="w-4 h-4"></i>
+                    <span class="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[9px] font-semibold">
+                        3
+                    </span>
+                </button>
+
+                <!-- Teacher profile dropdown -->
+                <div class="relative">
+                    <button type="button"
+                            id="teacherProfileButton"
+                            class="flex items-center gap-2 rounded-full pl-2 pr-1.5 py-1.5 hover:bg-slate-50 focus:outline-none">
+                        <div class="hidden sm:flex flex-col items-end mr-1">
+                            <span class="text-xs font-medium text-slate-700 leading-tight">
+                                <?= htmlspecialchars($teacherName) ?>
+                            </span>
+                            <span class="text-[10px] text-slate-400 leading-tight">
+                                <?= htmlspecialchars($schoolName) ?>
+                            </span>
+                        </div>
+                        <div class="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-semibold"
+                             title="<?= htmlspecialchars($teacherName . ($teacherEmail ? ' • ' . $teacherEmail : '')) ?>">
+                            <?= htmlspecialchars($teacherInitial) ?>
+                        </div>
+                        <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400"></i>
+                    </button>
+
+                    <!-- Dropdown menu -->
+                    <div id="teacherProfileMenu"
+                         class="hidden absolute right-0 mt-2 w-40 bg-white border border-slate-200 rounded-xl shadow-lg py-1 text-[11px] text-slate-700 z-20">
+                        <a href="profile.php"
+                           class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50">
+                            <i data-lucide="user" class="w-3 h-3"></i>
+                            <span>Profile</span>
+                        </a>
+                        <a href="edit_profile.php"
+                           class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50">
+                            <i data-lucide="edit-3" class="w-3 h-3"></i>
+                            <span>Edit profile</span>
+                        </a>
+                        <div class="my-1 border-t border-slate-100"></div>
+                        <form method="post" action="../logout.php">
+                            <button type="submit"
+                                    class="w-full flex items-center gap-2 px-3 py-1.5 text-rose-600 hover:bg-rose-50">
+                                <i data-lucide="log-out" class="w-3 h-3"></i>
+                                <span>Sign out</span>
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </header>
