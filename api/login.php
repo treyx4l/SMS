@@ -8,6 +8,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $data    = read_json_input();
 $idToken = $data['idToken'] ?? '';
+$requestedRole = $data['role'] ?? null;
 
 if ($idToken === '') {
     send_json(['error' => 'Missing token'], 422);
@@ -37,6 +38,38 @@ $stmt->execute();
 $result = $stmt->get_result();
 $user   = $result->fetch_assoc();
 $stmt->close();
+
+// If not found by UID and the user is logging in as a teacher, try to auto-link
+// them to a teacher profile based on email, then create a users row.
+if (!$user && $requestedRole === 'teacher') {
+    $stmt = $conn->prepare(
+        "SELECT school_id FROM teachers WHERE email = ? LIMIT 1"
+    );
+    $stmt->bind_param('s', $email);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if ($row) {
+        $schoolId = (int) $row['school_id'];
+        $fullName = $verified['name'] ?? $email;
+
+        $stmt = $conn->prepare(
+            "INSERT INTO users (school_id, firebase_uid, email, full_name, role)
+             VALUES (?, ?, ?, ?, 'teacher')"
+        );
+        $stmt->bind_param('isss', $schoolId, $uid, $email, $fullName);
+        $stmt->execute();
+        $newUserId = (int) $stmt->insert_id;
+        $stmt->close();
+
+        $user = [
+            'id'        => $newUserId,
+            'school_id' => $schoolId,
+            'role'      => 'teacher',
+        ];
+    }
+}
 
 if (!$user) {
     send_json(['error' => 'User not registered in Axis SMS'], 404);
