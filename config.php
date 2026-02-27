@@ -24,7 +24,7 @@ function get_db_connection(): mysqli
     return $conn;
 }
 
-// Firebase config (client side uses JS config, server side may verify ID tokens)
+// Firebase config (used on PHP side if needed)
 $FIREBASE_PROJECT_ID = getenv('FIREBASE_PROJECT_ID') ?: '';
 $FIREBASE_API_KEY    = getenv('FIREBASE_API_KEY') ?: '';
 

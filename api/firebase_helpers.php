@@ -31,14 +31,21 @@ function read_json_input(): array
  */
 function verify_firebase_id_token(string $idToken): ?array
 {
-    // TODO: integrate your real Firebase Admin verification here.
-    // This placeholder assumes you already have that configured.
-    // Example shape of the expected return:
-    // return [
-    //     'uid'   => $verifiedToken->claims()->get('sub'),
-    //     'email' => $verifiedToken->claims()->get('email'),
-    // ];
+    // DEVELOPMENT ONLY:
+    // This temporarily trusts the client and does NOT actually verify
+    // the ID token. It simply returns a fake payload shape so that the
+    // registration/login APIs can populate MySQL.
+    //
+    // Replace this with real Firebase Admin SDK verification in production.
 
-    return null;
+    $payload = json_decode(base64_decode(str_replace('_', '/', str_replace('-', '+', explode('.', $idToken)[1] ?? ''))), true);
+    if (!is_array($payload) || empty($payload['sub']) || empty($payload['email'])) {
+        return null;
+    }
+
+    return [
+        'uid'   => $payload['sub'],
+        'email' => $payload['email'],
+    ];
 }
 

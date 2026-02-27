@@ -3,8 +3,8 @@
 /**
  * Minimal .env loader.
  *
- * This will parse a .env file in the project root and
- * populate $_ENV and $_SERVER so getenv() works.
+ * Reads key=value pairs from a .env file in this project root (same
+ * directory as this file) and exposes them via getenv()/$_ENV/$_SERVER.
  */
 function load_env(string $path): void
 {
@@ -41,10 +41,9 @@ function load_env(string $path): void
     }
 }
 
-// Auto-load .env from project root when included.
-$root = __DIR__ . DIRECTORY_SEPARATOR . '.env';
+// Auto-load .env from the current project root (same folder as this file).
 if (!isset($_ENV['_ENV_LOADED'])) {
-    $envPath = dirname(__DIR__) . DIRECTORY_SEPARATOR . '.env';
+    $envPath = __DIR__ . DIRECTORY_SEPARATOR . '.env';
     load_env($envPath);
     $_ENV['_ENV_LOADED'] = true;
 }
