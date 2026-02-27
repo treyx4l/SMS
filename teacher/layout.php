@@ -141,18 +141,24 @@ function teacherNavLink(string $check, string $current): string
                     </a>
                 </div>
             </details>
-        </nav>
 
-        <!-- Logout button at bottom -->
-        <div class="px-3 pb-4 pt-2 border-t border-slate-100">
-            <form method="post" action="../logout.php" class="m-0">
-                <button type="submit"
-                        class="flex items-center gap-3 w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors">
-                    <i data-lucide="log-out" class="w-4 h-4 shrink-0"></i>
-                    <span>Logout</span>
-                </button>
-            </form>
-        </div>
+            <!-- Account -->
+            <details open>
+                <summary class="flex items-center justify-between cursor-pointer px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 hover:text-slate-600 select-none mb-1">
+                    <span>Account</span>
+                    <i data-lucide="chevron-right" class="chevron w-3 h-3"></i>
+                </summary>
+                <div class="space-y-0.5">
+                    <form method="post" action="../logout.php" class="m-0">
+                        <button type="submit"
+                                class="flex items-center gap-3 px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium w-full hover:bg-emerald-700 transition-colors">
+                            <i data-lucide="log-out" class="w-4 h-4 shrink-0"></i>
+                            <span>Logout</span>
+                        </button>
+                    </form>
+                </div>
+            </details>
+        </nav>
     </aside>
 
     <!-- Main content area -->
