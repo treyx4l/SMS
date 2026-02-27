@@ -21,8 +21,9 @@ if ($schoolId) {
     }
 }
 
-// Basic role guard – this assumes login.php sets user_role = 'teacher' for teachers
-if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'teacher') {
+// Basic role guard – allow access when there is no user_role yet,
+// but block explicitly logged-in non-teacher roles.
+if (isset($_SESSION['user_role']) && $_SESSION['user_role'] !== 'teacher') {
     http_response_code(403);
     echo 'Forbidden';
     exit;
@@ -86,9 +87,13 @@ function teacherNavLink(string $check, string $current): string
                         <i data-lucide="layout-dashboard" class="w-4 h-4 shrink-0"></i>
                         <span>My dashboard</span>
                     </a>
-                    <a href="reports_analytics.php" class="<?= teacherNavLink('Reports & Analytics', $page_title) ?>">
+                    <a href="reports.php" class="<?= teacherNavLink('Reports', $page_title) ?>">
                         <i data-lucide="bar-chart-2" class="w-4 h-4 shrink-0"></i>
-                        <span>Reports &amp; analytics</span>
+                        <span>Reports</span>
+                    </a>
+                    <a href="analytics.php" class="<?= teacherNavLink('Analytics', $page_title) ?>">
+                        <i data-lucide="activity" class="w-4 h-4 shrink-0"></i>
+                        <span>Analytics</span>
                     </a>
                 </div>
             </details>
