@@ -7,10 +7,11 @@ $schoolId = current_school_id();
 
 // Use index_no if column exists, else admission_no for backward compatibility
 $hasIndexNo = false;
+$hasAdmissionNo = false;
 $res = $conn->query("SHOW COLUMNS FROM students LIKE 'index_no'");
-if ($res && $res->num_rows > 0) {
-    $hasIndexNo = true;
-}
+if ($res && $res->num_rows > 0) $hasIndexNo = true;
+$res = $conn->query("SHOW COLUMNS FROM students LIKE 'admission_no'");
+if ($res && $res->num_rows > 0) $hasAdmissionNo = true;
 $idCol = $hasIndexNo ? 'index_no' : 'admission_no';
 
 $errors  = [];
@@ -57,16 +58,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $set = $hasIndexNo
                     ? "first_name=?, last_name=?, gender=?, index_no=?, class_id=?, phone=?, fingerprint_data=?"
                     : "first_name=?, last_name=?, gender=?, admission_no=?, class_id=?, phone=?";
+                if ($hasAdmissionNo && $hasIndexNo) $set .= ", admission_no=?";
                 if ($hasIndexNo && $photoPath) $set .= ", photo_path=?";
                 $set .= " WHERE id=? AND school_id=?";
 
                 $stmt = $conn->prepare("UPDATE students SET {$set}");
                 $params = [$first_name, $last_name, $gender, $index_no, $class_id, $phone];
                 if ($hasIndexNo) $params[] = $fingerprint ?: null;
+                if ($hasAdmissionNo && $hasIndexNo) $params[] = $index_no;
                 if ($hasIndexNo && $photoPath) $params[] = $photoPath;
                 $params[] = $id;
                 $params[] = $schoolId;
-                $types = 'ssssss' . ($hasIndexNo ? 's' : '') . ($hasIndexNo && $photoPath ? 's' : '') . 'ii';
+                $types = 'ssssss' . ($hasIndexNo ? 's' : '') . ($hasAdmissionNo && $hasIndexNo ? 's' : '') . ($hasIndexNo && $photoPath ? 's' : '') . 'ii';
                 $stmt->bind_param($types, ...$params);
                 $stmt->execute();
                 $stmt->close();
@@ -76,16 +79,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $cols = $hasIndexNo
                     ? "school_id, first_name, last_name, gender, index_no, class_id, phone, fingerprint_data"
                     : "school_id, first_name, last_name, gender, admission_no, class_id, phone";
+                if ($hasAdmissionNo && $hasIndexNo) $cols .= ", admission_no";
                 if ($hasIndexNo && $photoPath) $cols .= ", photo_path";
 
                 $phs = $hasIndexNo ? "?, ?, ?, ?, ?, ?, ?, ?" : "?, ?, ?, ?, ?, ?, ?";
+                if ($hasAdmissionNo && $hasIndexNo) $phs .= ", ?";
                 if ($hasIndexNo && $photoPath) $phs .= ", ?";
 
                 $stmt = $conn->prepare("INSERT INTO students ({$cols}) VALUES ({$phs})");
                 $params = [$schoolId, $first_name, $last_name, $gender, $index_no, $class_id, $phone];
                 if ($hasIndexNo) $params[] = $fingerprint ?: null;
+                if ($hasAdmissionNo && $hasIndexNo) $params[] = $index_no;
                 if ($hasIndexNo && $photoPath) $params[] = $photoPath;
-                $types = 'issssss' . ($hasIndexNo ? 's' : '') . ($hasIndexNo && $photoPath ? 's' : '');
+                $types = 'issssss' . ($hasIndexNo ? 's' : '') . ($hasAdmissionNo && $hasIndexNo ? 's' : '') . ($hasIndexNo && $photoPath ? 's' : '');
                 $stmt->bind_param($types, ...$params);
                 $stmt->execute();
                 $stmt->close();

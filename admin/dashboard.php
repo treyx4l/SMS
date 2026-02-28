@@ -86,7 +86,9 @@ $chartData   = json_encode(array_column($monthlyData, 'count'));
             </div>
             <i data-lucide="trending-up" class="w-4 h-4 text-indigo-500"></i>
         </div>
-        <canvas id="enrolmentChart" class="w-full" style="height:220px;"></canvas>
+        <div class="chart-container" style="position:relative;height:220px;width:100%;min-height:220px;max-height:220px;">
+            <canvas id="enrolmentChart"></canvas>
+        </div>
     </div>
 
     <!-- Composition doughnut -->
@@ -98,7 +100,9 @@ $chartData   = json_encode(array_column($monthlyData, 'count'));
             </div>
             <i data-lucide="pie-chart" class="w-4 h-4 text-indigo-500"></i>
         </div>
-        <canvas id="compositionChart" style="height:180px;"></canvas>
+        <div class="chart-container" style="position:relative;height:180px;width:100%;min-height:180px;max-height:180px;">
+            <canvas id="compositionChart"></canvas>
+        </div>
         <div class="mt-3 space-y-1.5">
             <?php foreach([
                 ['Students','#6366f1',$counts['students']],

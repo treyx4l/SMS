@@ -39,35 +39,42 @@ $result = $stmt->get_result();
 $user   = $result->fetch_assoc();
 $stmt->close();
 
-// If not found by UID and the user is logging in as a teacher, try to auto-link
-// them to a teacher profile based on email, then create a users row.
-if (!$user && $requestedRole === 'teacher') {
-    $stmt = $conn->prepare(
-        "SELECT school_id FROM teachers WHERE email = ? LIMIT 1"
-    );
-    $stmt->bind_param('s', $email);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
+// If not found by UID, try to auto-link by email for teacher, parent, driver, accountant.
+if (!$user && in_array($requestedRole, ['teacher', 'parent', 'driver', 'accountant'], true)) {
+    $tables = [
+        'teacher'    => 'teachers',
+        'parent'     => 'parents',
+        'driver'     => 'bus_drivers',
+        'accountant' => 'accountants',
+    ];
+    $table = $tables[$requestedRole] ?? null;
 
-    if ($row) {
-        $schoolId = (int) $row['school_id'];
-        $fullName = $verified['name'] ?? $email;
-
-        $stmt = $conn->prepare(
-            "INSERT INTO users (school_id, firebase_uid, email, full_name, role)
-             VALUES (?, ?, ?, ?, 'teacher')"
-        );
-        $stmt->bind_param('isss', $schoolId, $uid, $email, $fullName);
+    if ($table) {
+        $stmt = $conn->prepare("SELECT school_id, full_name FROM {$table} WHERE email = ? LIMIT 1");
+        $stmt->bind_param('s', $email);
         $stmt->execute();
-        $newUserId = (int) $stmt->insert_id;
+        $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
-        $user = [
-            'id'        => $newUserId,
-            'school_id' => $schoolId,
-            'role'      => 'teacher',
-        ];
+        if ($row) {
+            $schoolId = (int) $row['school_id'];
+            $fullName = $row['full_name'] ?? $verified['name'] ?? $email;
+
+            $stmt = $conn->prepare(
+                "INSERT INTO users (school_id, firebase_uid, email, full_name, role)
+                 VALUES (?, ?, ?, ?, ?)"
+            );
+            $stmt->bind_param('issss', $schoolId, $uid, $email, $fullName, $requestedRole);
+            $stmt->execute();
+            $newUserId = (int) $stmt->insert_id;
+            $stmt->close();
+
+            $user = [
+                'id'        => $newUserId,
+                'school_id' => $schoolId,
+                'role'      => $requestedRole,
+            ];
+        }
     }
 }
 

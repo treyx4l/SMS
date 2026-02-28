@@ -90,7 +90,9 @@ $growth = $lastMonth > 0 ? round((($thisMonth - $lastMonth) / $lastMonth) * 100,
             </div>
             <i data-lucide="activity" class="w-4 h-4 text-indigo-500"></i>
         </div>
-        <canvas id="trendChart" style="height:220px;"></canvas>
+        <div class="chart-container" style="position:relative;height:220px;width:100%;min-height:220px;max-height:220px;">
+            <canvas id="trendChart"></canvas>
+        </div>
     </div>
 
     <!-- Class size distribution -->
@@ -103,7 +105,9 @@ $growth = $lastMonth > 0 ? round((($thisMonth - $lastMonth) / $lastMonth) * 100,
             <i data-lucide="bar-chart" class="w-4 h-4 text-indigo-500"></i>
         </div>
         <?php if ($classData): ?>
-        <canvas id="classSizeChart" style="height:220px;"></canvas>
+        <div class="chart-container" style="position:relative;height:220px;width:100%;min-height:220px;max-height:220px;">
+            <canvas id="classSizeChart"></canvas>
+        </div>
         <?php else: ?>
         <div class="flex flex-col items-center justify-center h-40 text-slate-300">
             <i data-lucide="inbox" class="w-10 h-10 mb-2"></i>
