@@ -275,18 +275,14 @@ window.__sendEmailVerification = sendEmailVerification;
 
         <div class="mb-4">
             <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Select Ward(s) *</label>
-            <p class="text-[11px] text-slate-500 mb-2">Choose the student(s) this parent is responsible for.</p>
-            <div class="max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-3 bg-slate-50">
-                <?php foreach ($students as $s): ?>
-                <label class="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-white/60 rounded px-2 -mx-2">
-                    <input type="checkbox" name="ward_ids_add[]" value="<?= (int) $s['id'] ?>" class="ward-add rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
-                    <span class="text-sm text-slate-700"><?= $s['display'] ?></span>
-                </label>
-                <?php endforeach; ?>
-                <?php if (!$students): ?>
-                <p class="text-xs text-slate-500">No students in this school. Add students first.</p>
-                <?php endif; ?>
+            <p class="text-[11px] text-slate-500 mb-2">Search and select the student(s) this parent is responsible for.</p>
+            <div class="relative">
+                <input type="text" id="ward-search-add" placeholder="Search students by name or index…"
+                       class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                       autocomplete="off">
+                <div id="ward-results-add" class="hidden absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto z-20"></div>
             </div>
+            <div id="ward-selected-add" class="mt-2 flex flex-wrap gap-2 min-h-[2rem]"></div>
         </div>
 
         <div class="flex items-center gap-2 px-3 py-2.5 bg-blue-50 border border-blue-100 rounded-lg mb-4">
@@ -361,19 +357,15 @@ window.__sendEmailVerification = sendEmailVerification;
 
         <div class="mb-4">
             <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Ward(s)</label>
-            <div class="max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-3 bg-slate-50">
-                <?php foreach ($students as $s): ?>
-                <label class="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-white/60 rounded px-2 -mx-2">
-                    <input type="checkbox" name="ward_ids[]" value="<?= (int) $s['id'] ?>"
-                           <?= in_array((int) $s['id'], $edit['ward_ids'] ?? []) ? 'checked' : '' ?>
-                           class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
-                    <span class="text-sm text-slate-700"><?= $s['display'] ?></span>
-                </label>
-                <?php endforeach; ?>
-                <?php if (!$students): ?>
-                <p class="text-xs text-slate-500">No students in this school.</p>
-                <?php endif; ?>
+            <p class="text-[11px] text-slate-500 mb-2">Search and select the student(s) this parent is responsible for.</p>
+            <div class="relative">
+                <input type="text" id="ward-search-edit" placeholder="Search students by name or index…"
+                       class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                       autocomplete="off">
+                <div id="ward-results-edit" class="hidden absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto z-20"></div>
             </div>
+            <div id="ward-selected-edit" class="mt-2 flex flex-wrap gap-2 min-h-[2rem]"></div>
+            <div id="ward-ids-edit-container"></div>
         </div>
 
         <div class="flex items-center gap-3">
@@ -473,6 +465,82 @@ window.__sendEmailVerification = sendEmailVerification;
 <?php require_once __DIR__ . '/footer.php'; ?>
 <script>lucide.createIcons();</script>
 <script>
+const WARD_STUDENTS = <?= json_encode(array_map(fn($s) => ['id' => (int)$s['id'], 'display' => $s['display'], 'search' => strtolower($s['display'] . ' ' . ($s['idx'] ?? ''))], $students)) ?>;
+
+window.wardIdsAdd = [];
+window.wardIdsEdit = <?= json_encode(isset($edit['ward_ids']) ? $edit['ward_ids'] : []) ?>;
+
+function renderWardChipsAdd() {
+    const container = document.getElementById('ward-selected-add');
+    if (!container) return;
+    container.innerHTML = window.wardIdsAdd.map(({id, display}) =>
+        `<span data-ward-id="${id}" class="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-medium">
+            ${display} <button type="button" onclick="removeWardAdd(${id})" class="hover:text-indigo-900">&times;</button>
+        </span>`
+    ).join('');
+}
+
+function renderWardChipsEdit() {
+    const container = document.getElementById('ward-selected-edit');
+    const hiddenContainer = document.getElementById('ward-ids-edit-container');
+    if (!container || !hiddenContainer) return;
+    const items = window.wardIdsEdit.map(id => {
+        const s = WARD_STUDENTS.find(st => st.id === id);
+        return s ? { id: s.id, display: s.display } : null;
+    }).filter(Boolean);
+    container.innerHTML = items.map(({id, display}) =>
+        `<span data-ward-id="${id}" class="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-medium">
+            ${display} <button type="button" onclick="removeWardEdit(${id})" class="hover:text-indigo-900">&times;</button>
+        </span>`
+    ).join('');
+    hiddenContainer.innerHTML = window.wardIdsEdit.map(id => `<input type="hidden" name="ward_ids[]" value="${id}">`).join('');
+}
+
+function addWardAdd(id) {
+    const s = WARD_STUDENTS.find(st => st.id === id);
+    if (!s || window.wardIdsAdd.some(w => w.id === id)) return;
+    window.wardIdsAdd.push({ id, display: s.display });
+    renderWardChipsAdd();
+}
+
+function removeWardAdd(id) {
+    window.wardIdsAdd = window.wardIdsAdd.filter(w => w.id !== id);
+    renderWardChipsAdd();
+}
+
+function addWardEdit(id) {
+    if (window.wardIdsEdit.includes(id)) return;
+    window.wardIdsEdit.push(id);
+    renderWardChipsEdit();
+}
+
+function removeWardEdit(id) {
+    window.wardIdsEdit = window.wardIdsEdit.filter(x => x !== id);
+    renderWardChipsEdit();
+}
+
+function setupWardSearch(prefix, addFn) {
+    const searchEl = document.getElementById('ward-search-' + prefix);
+    const resultsEl = document.getElementById('ward-results-' + prefix);
+    if (!searchEl || !resultsEl) return;
+    searchEl.addEventListener('input', function() {
+        const q = this.value.toLowerCase().trim();
+        if (q.length < 1) { resultsEl.classList.add('hidden'); return; }
+        const filtered = WARD_STUDENTS.filter(s => s.search.includes(q));
+        const selectedIds = prefix === 'add' ? window.wardIdsAdd.map(w => w.id) : window.wardIdsEdit;
+        const available = filtered.filter(s => !selectedIds.includes(s.id));
+        resultsEl.innerHTML = available.length ? available.slice(0, 15).map(s =>
+            `<button type="button" class="w-full text-left px-3 py-2 hover:bg-slate-50 text-sm text-slate-700 border-b border-slate-100 last:border-0" onclick="addWard${prefix === 'add' ? 'Add' : 'Edit'}(${s.id}); document.getElementById('ward-search-${prefix}').value=''; document.getElementById('ward-results-${prefix}').classList.add('hidden');">${s.display}</button>`
+        ).join('') : '<div class="px-3 py-2 text-xs text-slate-500">No matching students</div>';
+        resultsEl.classList.remove('hidden');
+    });
+    searchEl.addEventListener('blur', () => setTimeout(() => resultsEl.classList.add('hidden'), 200));
+}
+document.addEventListener('DOMContentLoaded', function() {
+    setupWardSearch('add');
+    setupWardSearch('edit');
+    renderWardChipsEdit();
+});
 document.getElementById('parentSearch')?.addEventListener('input', function() {
     const q = this.value.toLowerCase();
     document.querySelectorAll('.parent-row').forEach(row => {
@@ -495,8 +563,7 @@ async function createParent() {
     const password = document.getElementById('new-password').value;
     const confirm  = document.getElementById('new-password-confirm').value;
 
-    const wardEls = document.querySelectorAll('.ward-add:checked');
-    const wardIds = Array.from(wardEls).map(el => parseInt(el.value, 10)).filter(Boolean);
+    const wardIds = Array.from(document.querySelectorAll('#ward-selected-add [data-ward-id]')).map(el => parseInt(el.getAttribute('data-ward-id'), 10)).filter(Boolean);
 
     errEl.classList.add('hidden');
     succEl.classList.add('hidden');
@@ -556,7 +623,9 @@ async function createParent() {
             if (el) el.value = '';
         });
         if (photoInput) photoInput.value = '';
-        document.querySelectorAll('.ward-add').forEach(cb => cb.checked = false);
+        window.wardIdsAdd = [];
+        renderWardChipsAdd();
+        document.getElementById('ward-search-add').value = '';
 
         setTimeout(() => location.reload(), 2000);
     } catch (err) {

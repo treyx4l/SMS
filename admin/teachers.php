@@ -1,6 +1,7 @@
 <?php
 $page_title = 'Teachers';
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/../api/firebase_helpers.php';
 
 $conn     = get_db_connection();
 $schoolId = current_school_id();
@@ -24,6 +25,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if (!$errors && $id) {
+            // Get old email and firebase_uid BEFORE updating (for users table and Firebase)
+            $stmt = $conn->prepare("SELECT t.email AS old_email, u.firebase_uid FROM teachers t LEFT JOIN users u ON u.email = t.email AND u.school_id = t.school_id AND u.role = 'teacher' WHERE t.id = ? AND t.school_id = ?");
+            $stmt->bind_param('ii', $id, $schoolId);
+            $stmt->execute();
+            $prev = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            $oldEmail    = $prev['old_email'] ?? '';
+            $firebaseUid = $prev['firebase_uid'] ?? '';
+
             // Photo upload
             $photoPath = null;
             $res = $conn->query("SHOW COLUMNS FROM teachers LIKE 'photo_path'");
@@ -48,21 +58,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute();
             $stmt->close();
 
-            // Update users table too (keep in sync)
-            $stmt = $conn->prepare("UPDATE users SET full_name=?, email=? WHERE email=(SELECT t_email FROM (SELECT email AS t_email FROM teachers WHERE id=? AND school_id=?) AS sub) AND school_id=? AND role='teacher'");
-            // Simpler approach: match by the old email stored in teachers before update
-            // Actually just match by school_id + role + looking up the teacher's firebase link
-            // We'll update full_name on users by joining on email
-            $stmt->close();
+            // Update users table: prefer firebase_uid (reliable), else fallback to old email
+            if ($firebaseUid !== '') {
+                $stmt = $conn->prepare("UPDATE users SET full_name=?, email=? WHERE firebase_uid=? AND school_id=? AND role='teacher'");
+                $stmt->bind_param('sssi', $full_name, $email, $firebaseUid, $schoolId);
+                $stmt->execute();
+                $stmt->close();
+            } elseif ($oldEmail !== '') {
+                $stmt = $conn->prepare("UPDATE users SET full_name=?, email=? WHERE email=? AND school_id=? AND role='teacher'");
+                $stmt->bind_param('sssi', $full_name, $email, $oldEmail, $schoolId);
+                $stmt->execute();
+                $stmt->close();
+            }
 
-            // Simpler: update users matched by email subquery won't work after email change.
-            // Just update full_name on users where email = old email. We need old email first.
-            // Re-fetch before we updated (already updated above). So update users by phone/id linkage isn't reliable.
-            // Best we can do without foreign key: update users by email matching what we just set.
-            $stmt = $conn->prepare("UPDATE users SET full_name=?, email=? WHERE email=? AND school_id=? AND role='teacher'");
-            $stmt->bind_param('sssi', $full_name, $email, $email, $schoolId);
-            $stmt->execute();
-            $stmt->close();
+            // Update Firebase Auth email when it changed and we have firebase_uid
+            $emailChanged = ($oldEmail !== '' && strcasecmp(trim($oldEmail), trim($email)) !== 0);
+            if ($emailChanged && $firebaseUid !== '') {
+                update_firebase_user_email($firebaseUid, $email);
+            }
+
+            // Update teacher_class_subjects if table exists
+            $tcsExists = (bool) ($conn->query("SHOW TABLES LIKE 'teacher_class_subjects'")->num_rows ?? 0);
+            if ($tcsExists) {
+                $class_ids   = isset($_POST['class_ids']) && is_array($_POST['class_ids'])
+                    ? array_map('intval', array_filter($_POST['class_ids'])) : [];
+                $subject_ids = isset($_POST['subject_ids']) && is_array($_POST['subject_ids'])
+                    ? array_map('intval', array_filter($_POST['subject_ids'])) : [];
+                $stmt = $conn->prepare("DELETE FROM teacher_class_subjects WHERE teacher_id=? AND school_id=?");
+                $stmt->bind_param('ii', $id, $schoolId);
+                $stmt->execute();
+                $stmt->close();
+                foreach ($class_ids as $cid) {
+                    foreach ($subject_ids as $sid) {
+                        if ($cid > 0 && $sid > 0) {
+                            $stmt = $conn->prepare("INSERT IGNORE INTO teacher_class_subjects (school_id, teacher_id, class_id, subject_id) VALUES (?, ?, ?, ?)");
+                            $stmt->bind_param('iiii', $schoolId, $id, $cid, $sid);
+                            $stmt->execute();
+                            $stmt->close();
+                        }
+                    }
+                }
+            }
 
             $success = 'Teacher updated successfully.';
         }
@@ -95,31 +131,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch all teachers
+// Fetch all teachers (photo_path may not exist if migration not run)
 $teachers = [];
+$hasPhotoPath = false;
+$res = $conn->query("SHOW COLUMNS FROM teachers LIKE 'photo_path'");
+if ($res && $res->num_rows > 0) $hasPhotoPath = true;
+
+$sel = $hasPhotoPath ? 't.id, t.full_name, t.email, t.phone, t.photo_path, t.created_at' : 't.id, t.full_name, t.email, t.phone, t.created_at';
 $stmt = $conn->prepare("
-    SELECT t.id, t.full_name, t.email, t.phone, t.photo_path, t.created_at,
+    SELECT {$sel},
            CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END AS has_login
     FROM teachers t
     LEFT JOIN users u ON u.email = t.email AND u.school_id = t.school_id AND u.role = 'teacher'
     WHERE t.school_id = ?
     ORDER BY t.created_at DESC
 ");
+if ($stmt) {
+    $stmt->bind_param('i', $schoolId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($row = $res->fetch_assoc()) $teachers[] = $row;
+    $stmt->close();
+}
+
+// Fetch classes and subjects for edit modal
+$classes  = [];
+$subjects = [];
+$stmt = $conn->prepare("SELECT id, name, section FROM classes WHERE school_id=? ORDER BY name");
 $stmt->bind_param('i', $schoolId);
 $stmt->execute();
 $res = $stmt->get_result();
-while ($row = $res->fetch_assoc()) $teachers[] = $row;
+while ($row = $res->fetch_assoc()) $classes[] = $row;
 $stmt->close();
 
-// Edit target
-$edit = null;
-if (isset($_GET['edit_id'])) {
-    $eid  = (int) $_GET['edit_id'];
-    $stmt = $conn->prepare("SELECT * FROM teachers WHERE id=? AND school_id=?");
-    $stmt->bind_param('ii', $eid, $schoolId);
+$stmt = $conn->prepare("SELECT id, name, code FROM subjects WHERE school_id=? ORDER BY name");
+$stmt->bind_param('i', $schoolId);
+$stmt->execute();
+$res = $stmt->get_result();
+while ($row = $res->fetch_assoc()) $subjects[] = $row;
+$stmt->close();
+
+// Teacher class+subject assignments (for display and edit modal)
+$teacherAssignments = [];
+$tcsExists = (bool) ($conn->query("SHOW TABLES LIKE 'teacher_class_subjects'")->num_rows ?? 0);
+if ($tcsExists) {
+    $stmt = $conn->prepare("SELECT teacher_id, class_id, subject_id FROM teacher_class_subjects WHERE school_id=?");
+    $stmt->bind_param('i', $schoolId);
     $stmt->execute();
-    $edit = $stmt->get_result()->fetch_assoc() ?: null;
+    $res = $stmt->get_result();
+    while ($row = $res->fetch_assoc()) {
+        $tid = (int) $row['teacher_id'];
+        if (!isset($teacherAssignments[$tid])) $teacherAssignments[$tid] = ['class_ids' => [], 'subject_ids' => []];
+        $teacherAssignments[$tid]['class_ids'][] = (int) $row['class_id'];
+        $teacherAssignments[$tid]['subject_ids'][] = (int) $row['subject_id'];
+    }
     $stmt->close();
+    foreach ($teacherAssignments as $tid => $a) {
+        $teacherAssignments[$tid]['class_ids'] = array_unique($a['class_ids']);
+        $teacherAssignments[$tid]['subject_ids'] = array_unique($a['subject_ids']);
+    }
 }
 
 $total      = count($teachers);
@@ -277,70 +347,6 @@ window.__sendEmailVerification = sendEmailVerification;
     </div>
 </div>
 
-<!-- ── EDIT TEACHER PANEL (no password) ── -->
-<?php if ($edit): ?>
-<div class="bg-white border border-indigo-200 rounded-xl overflow-hidden">
-    <div class="flex items-center gap-2.5 px-5 py-3.5 border-b border-indigo-100 bg-indigo-50">
-        <i data-lucide="pencil" class="w-4 h-4 text-indigo-600"></i>
-        <span class="text-sm font-semibold text-indigo-800">Editing: <?= htmlspecialchars($edit['full_name']) ?></span>
-        <span class="ml-auto text-[11px] text-indigo-500">Password cannot be changed here — use Firebase console</span>
-    </div>
-    <form method="post" enctype="multipart/form-data" class="p-5">
-        <input type="hidden" name="action" value="update">
-        <input type="hidden" name="id" value="<?= (int)$edit['id'] ?>">
-
-        <div class="flex items-center gap-6 mb-4">
-            <div class="w-20 h-20 rounded-xl border-2 border-slate-200 flex items-center justify-center bg-slate-50 overflow-hidden shrink-0">
-                <?php if (!empty($edit['photo_path']) && file_exists(dirname(__DIR__) . '/' . $edit['photo_path'])): ?>
-                <img src="../<?= htmlspecialchars($edit['photo_path']) ?>" alt="" class="w-full h-full object-cover">
-                <?php else: ?>
-                <i data-lucide="user" class="w-10 h-10 text-slate-300"></i>
-                <?php endif; ?>
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Photo</label>
-                <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp"
-                       class="block w-full text-sm text-slate-500 file:mr-2 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-sm file:font-medium hover:file:bg-indigo-100">
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Full Name *</label>
-                <input type="text" name="full_name" required
-                       value="<?= htmlspecialchars($edit['full_name']) ?>"
-                       class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition">
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Email</label>
-                <input type="email" name="email"
-                       value="<?= htmlspecialchars($edit['email'] ?? '') ?>"
-                       class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition">
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Phone</label>
-                <input type="text" name="phone"
-                       value="<?= htmlspecialchars($edit['phone'] ?? '') ?>"
-                       class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition">
-            </div>
-        </div>
-
-        <div class="flex items-center gap-3">
-            <button type="submit"
-                    class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors">
-                <i data-lucide="save" class="w-4 h-4"></i>
-                Save Changes
-            </button>
-            <a href="teachers.php"
-               class="inline-flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors">
-                <i data-lucide="x" class="w-4 h-4"></i>
-                Cancel
-            </a>
-        </div>
-    </form>
-</div>
-<?php endif; ?>
-
 <!-- ── TEACHERS TABLE ── -->
 <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
     <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
@@ -361,6 +367,7 @@ window.__sendEmailVerification = sendEmailVerification;
                     <th class="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Teacher</th>
                     <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Email</th>
                     <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Phone</th>
+                    <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Classes / Subjects</th>
                     <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Login</th>
                     <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Joined</th>
                     <th class="text-right px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Actions</th>
@@ -369,7 +376,7 @@ window.__sendEmailVerification = sendEmailVerification;
             <tbody class="divide-y divide-slate-100">
                 <?php if (!$teachers): ?>
                 <tr>
-                    <td colspan="6" class="px-5 py-12 text-center">
+                    <td colspan="7" class="px-5 py-12 text-center">
                         <div class="flex flex-col items-center text-slate-300">
                             <i data-lucide="user-check" class="w-10 h-10 mb-3"></i>
                             <p class="text-sm text-slate-400 font-medium">No teachers yet</p>
@@ -392,6 +399,17 @@ window.__sendEmailVerification = sendEmailVerification;
                     </td>
                     <td class="px-4 py-3.5 text-slate-500 text-xs"><?= htmlspecialchars($t['email'] ?? '—') ?></td>
                     <td class="px-4 py-3.5 text-slate-500 text-xs"><?= htmlspecialchars($t['phone'] ?? '—') ?></td>
+                    <td class="px-4 py-3.5 text-xs text-slate-600">
+                        <?php
+                        $a = $teacherAssignments[(int)$t['id']] ?? ['class_ids'=>[],'subject_ids'=>[]];
+                        $cls = array_filter($classes, fn($c)=>in_array((int)$c['id'], $a['class_ids']));
+                        $subs = array_filter($subjects, fn($s)=>in_array((int)$s['id'], $a['subject_ids']));
+                        $parts = [];
+                        if (!empty($cls)) $parts[] = implode(', ', array_map(fn($c)=>$c['name'].($c['section']??''?' '.$c['section']:''), $cls));
+                        if (!empty($subs)) $parts[] = implode(', ', array_column($subs, 'name'));
+                        echo !empty($parts) ? implode(' · ', $parts) : '—';
+                        ?>
+                    </td>
                     <td class="px-4 py-3.5">
                         <?php if ($t['has_login']): ?>
                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
@@ -406,10 +424,18 @@ window.__sendEmailVerification = sendEmailVerification;
                     <td class="px-4 py-3.5 text-slate-400 text-xs"><?= date('d M Y', strtotime($t['created_at'])) ?></td>
                     <td class="px-5 py-3.5 text-right">
                         <div class="flex items-center justify-end gap-2">
-                            <a href="teachers.php?edit_id=<?= (int)$t['id'] ?>"
-                               class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-200 text-slate-600 rounded-lg hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
+                            <button type="button" onclick='openEditTeacherModal(<?= json_encode([
+                                "id" => (int)$t["id"],
+                                "full_name" => $t["full_name"],
+                                "email" => $t["email"] ?? "",
+                                "phone" => $t["phone"] ?? "",
+                                "photo_path" => $t["photo_path"] ?? "",
+                                "class_ids" => $teacherAssignments[(int)$t["id"]]["class_ids"] ?? [],
+                                "subject_ids" => $teacherAssignments[(int)$t["id"]]["subject_ids"] ?? []
+                            ]) ?>)'
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-200 text-slate-600 rounded-lg hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
                                 <i data-lucide="pencil" class="w-3 h-3"></i> Edit
-                            </a>
+                            </button>
                             <form method="post" class="inline"
                                   onsubmit="return confirm('Remove <?= htmlspecialchars(addslashes($t['full_name'])) ?>? This will revoke their login access.')">
                                 <input type="hidden" name="action" value="delete">
@@ -428,8 +454,114 @@ window.__sendEmailVerification = sendEmailVerification;
     </div>
 </div>
 
+<!-- Edit Teacher Modal -->
+<div id="editTeacherModal" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm overflow-y-auto py-8">
+    <div class="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg mx-4 my-auto">
+        <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+            <span class="text-sm font-semibold text-slate-800">Edit Teacher</span>
+            <button type="button" onclick="closeEditTeacherModal()" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+        <form method="post" enctype="multipart/form-data" id="editTeacherForm" class="p-5">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="id" id="editTeacherId">
+
+            <div class="flex items-center gap-4 mb-4">
+                <div class="w-16 h-16 rounded-xl border-2 border-slate-200 flex items-center justify-center bg-slate-50 overflow-hidden shrink-0" id="editTeacherPhotoPreview">
+                    <i data-lucide="user" class="w-8 h-8 text-slate-300"></i>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Photo</label>
+                    <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp"
+                           class="block w-full text-sm text-slate-500 file:mr-2 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-sm file:font-medium hover:file:bg-indigo-100">
+                </div>
+            </div>
+
+            <div class="space-y-4 mb-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Full Name *</label>
+                    <input type="text" name="full_name" id="editTeacherName" required
+                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Email</label>
+                    <input type="email" name="email" id="editTeacherEmail"
+                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Phone</label>
+                    <input type="text" name="phone" id="editTeacherPhone"
+                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                </div>
+            </div>
+
+            <?php if ($tcsExists && ($classes || $subjects)): ?>
+            <div class="border-t border-slate-200 pt-4 mb-4">
+                <p class="text-xs font-semibold text-slate-500 uppercase mb-2">Assign Classes & Subjects</p>
+                <p class="text-[11px] text-slate-500 mb-2">Select classes and subjects this teacher teaches. All combinations will be saved.</p>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-600 mb-1.5">Classes</label>
+                        <div class="max-h-32 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1">
+                            <?php foreach ($classes as $c): ?>
+                            <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-50 rounded px-2 py-1 -mx-2">
+                                <input type="checkbox" name="class_ids[]" value="<?= (int)$c['id'] ?>" class="edit-class-cb rounded border-slate-300 text-indigo-600">
+                                <span class="text-xs text-slate-700"><?= htmlspecialchars($c['name']) ?><?= !empty($c['section']) ? ' ' . htmlspecialchars($c['section']) : '' ?></span>
+                            </label>
+                            <?php endforeach; ?>
+                            <?php if (!$classes): ?><p class="text-xs text-slate-500 px-2">No classes</p><?php endif; ?>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-600 mb-1.5">Subjects</label>
+                        <div class="max-h-32 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1">
+                            <?php foreach ($subjects as $s): ?>
+                            <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-50 rounded px-2 py-1 -mx-2">
+                                <input type="checkbox" name="subject_ids[]" value="<?= (int)$s['id'] ?>" class="edit-subject-cb rounded border-slate-300 text-indigo-600">
+                                <span class="text-xs text-slate-700"><?= htmlspecialchars($s['name']) ?><?= $s['code'] ? ' (' . htmlspecialchars($s['code']) . ')' : '' ?></span>
+                            </label>
+                            <?php endforeach; ?>
+                            <?php if (!$subjects): ?><p class="text-xs text-slate-500 px-2">No subjects</p><?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <div class="flex gap-2">
+                <button type="button" onclick="closeEditTeacherModal()" class="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
+                <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">
+                    <i data-lucide="save" class="w-4 h-4 inline-block mr-1"></i> Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <?php require_once __DIR__ . '/footer.php'; ?>
 <script>lucide.createIcons();</script>
+<script>
+function openEditTeacherModal(data) {
+    document.getElementById('editTeacherId').value = data.id;
+    document.getElementById('editTeacherName').value = data.full_name || '';
+    document.getElementById('editTeacherEmail').value = data.email || '';
+    document.getElementById('editTeacherPhone').value = data.phone || '';
+    const preview = document.getElementById('editTeacherPhotoPreview');
+    if (data.photo_path && data.photo_path.trim() !== '') {
+        preview.innerHTML = '<img src="../' + (data.photo_path || '').replace(/"/g, '&quot;') + '" alt="" class="w-full h-full object-cover">';
+    } else {
+        preview.innerHTML = '<i data-lucide="user" class="w-8 h-8 text-slate-300"></i>';
+    }
+    document.querySelectorAll('.edit-class-cb').forEach(cb => { cb.checked = (data.class_ids || []).indexOf(parseInt(cb.value, 10)) >= 0; });
+    document.querySelectorAll('.edit-subject-cb').forEach(cb => { cb.checked = (data.subject_ids || []).indexOf(parseInt(cb.value, 10)) >= 0; });
+    document.getElementById('editTeacherModal').classList.remove('hidden');
+    if (window.lucide) lucide.createIcons();
+}
+function closeEditTeacherModal() {
+    document.getElementById('editTeacherModal').classList.add('hidden');
+}
+</script>
 <script>
 // Live search
 document.getElementById('teacherSearch').addEventListener('input', function() {
