@@ -203,7 +203,8 @@ function teacherNavLink(string $check, string $current): string
                 <button type="button"
                         id="teacherMessagesButton"
                         class="relative inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 focus:outline-none"
-                        aria-label="Messages">
+                        aria-label="Messages"
+                        title="Messages">
                     <i data-lucide="message-circle" class="w-4 h-4"></i>
                     <span class="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-emerald-500 text-white text-[9px] font-semibold">
                         2
@@ -215,7 +216,8 @@ function teacherNavLink(string $check, string $current): string
                     <button type="button"
                             id="teacherNotificationsButton"
                             class="relative inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 focus:outline-none"
-                            aria-label="Notifications">
+                            aria-label="Notifications"
+                            title="Notifications">
                         <i data-lucide="bell" class="w-4 h-4"></i>
                         <span class="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[9px] font-semibold">
                             3
@@ -271,7 +273,7 @@ function teacherNavLink(string $check, string $current): string
                             </span>
                         </div>
                         <div class="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-semibold"
-                             title="<?= htmlspecialchars($teacherName . ($teacherEmail ? ' • ' . $teacherEmail : '')) ?>">
+                             title="Account">
                             <?= htmlspecialchars($teacherInitial) ?>
                         </div>
                         <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400"></i>
