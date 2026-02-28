@@ -31,8 +31,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->close();
             $oldEmail = $oldRow['email'] ?? '';
 
-            $stmt = $conn->prepare("UPDATE accountants SET full_name=?, email=?, phone=?, address=? WHERE id=? AND school_id=?");
-            $stmt->bind_param('ssssii', $full_name, $email, $phone, $address, $id, $schoolId);
+            $photoPath = null;
+            $res = $conn->query("SHOW COLUMNS FROM accountants LIKE 'photo_path'");
+            if ($res && $res->num_rows > 0 && !empty($_FILES['photo']['name']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+                $uploadDir = dirname(__DIR__) . '/storage/staff/';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
+                if (in_array($ext, ['jpg','jpeg','png','gif','webp'])) {
+                    $filename = 'accountant_' . $id . '_' . uniqid() . '.' . $ext;
+                    if (move_uploaded_file($_FILES['photo']['tmp_name'], $uploadDir . $filename)) {
+                        $photoPath = 'storage/staff/' . $filename;
+                    }
+                }
+            }
+            if ($photoPath) {
+                $stmt = $conn->prepare("UPDATE accountants SET full_name=?, email=?, phone=?, address=?, photo_path=? WHERE id=? AND school_id=?");
+                $stmt->bind_param('sssssii', $full_name, $email, $phone, $address, $photoPath, $id, $schoolId);
+            } else {
+                $stmt = $conn->prepare("UPDATE accountants SET full_name=?, email=?, phone=?, address=? WHERE id=? AND school_id=?");
+                $stmt->bind_param('ssssii', $full_name, $email, $phone, $address, $id, $schoolId);
+            }
             $stmt->execute();
             $stmt->close();
 
@@ -196,6 +214,11 @@ window.__sendEmailVerification = sendEmailVerification;
                 <input type="password" id="new-password-confirm" required placeholder="Repeat password"
                        class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Photo</label>
+                <input type="file" id="new-accountant-photo" accept="image/jpeg,image/png,image/gif,image/webp"
+                       class="block w-full text-sm text-slate-500 file:mr-2 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-sm file:font-medium hover:file:bg-indigo-100">
+            </div>
         </div>
 
         <div class="flex items-center gap-2 px-3 py-2.5 bg-blue-50 border border-blue-100 rounded-lg mb-4">
@@ -226,9 +249,24 @@ window.__sendEmailVerification = sendEmailVerification;
         <i data-lucide="pencil" class="w-4 h-4 text-indigo-600"></i>
         <span class="text-sm font-semibold text-indigo-800">Editing: <?= htmlspecialchars($edit['full_name']) ?></span>
     </div>
-    <form method="post" class="p-5">
+    <form method="post" enctype="multipart/form-data" class="p-5">
         <input type="hidden" name="action" value="update">
         <input type="hidden" name="id" value="<?= (int) $edit['id'] ?>">
+
+        <div class="flex items-center gap-6 mb-4">
+            <div class="w-20 h-20 rounded-xl border-2 border-slate-200 flex items-center justify-center bg-slate-50 overflow-hidden shrink-0">
+                <?php if (!empty($edit['photo_path']) && file_exists(dirname(__DIR__) . '/' . ($edit['photo_path'] ?? ''))): ?>
+                <img src="../<?= htmlspecialchars($edit['photo_path']) ?>" alt="" class="w-full h-full object-cover">
+                <?php else: ?>
+                <i data-lucide="user" class="w-10 h-10 text-slate-300"></i>
+                <?php endif; ?>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Photo</label>
+                <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp"
+                       class="block w-full text-sm text-slate-500 file:mr-2 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-sm file:font-medium hover:file:bg-indigo-100">
+            </div>
+        </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
             <div>
@@ -411,6 +449,15 @@ async function createAccountant() {
             throw new Error(data.error || 'Server error');
         }
 
+        const photoInput = document.getElementById('new-accountant-photo');
+        if (photoInput && photoInput.files && photoInput.files[0] && data.accountant_id) {
+            const fd = new FormData();
+            fd.append('type', 'accountant');
+            fd.append('id', data.accountant_id);
+            fd.append('photo', photoInput.files[0]);
+            try { await fetch('../api/upload_staff_photo.php', { method: 'POST', body: fd }); } catch(e) {}
+        }
+
         try { await window.__sendEmailVerification(cred.user); } catch(e) {}
 
         succText.textContent = 'Accountant "' + name + '" created! They can log in using their email and password.';
@@ -420,6 +467,7 @@ async function createAccountant() {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
+        if (photoInput) photoInput.value = '';
 
         setTimeout(() => location.reload(), 2000);
     } catch (err) {

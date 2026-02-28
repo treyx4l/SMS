@@ -24,9 +24,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if (!$errors && $id) {
-            // Update teachers table
-            $stmt = $conn->prepare("UPDATE teachers SET full_name=?, email=?, phone=? WHERE id=? AND school_id=?");
-            $stmt->bind_param('sssii', $full_name, $email, $phone, $id, $schoolId);
+            // Photo upload
+            $photoPath = null;
+            $res = $conn->query("SHOW COLUMNS FROM teachers LIKE 'photo_path'");
+            if ($res && $res->num_rows > 0 && !empty($_FILES['photo']['name']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+                $uploadDir = dirname(__DIR__) . '/storage/staff/';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
+                if (in_array($ext, ['jpg','jpeg','png','gif','webp'])) {
+                    $filename = 'teacher_' . $id . '_' . uniqid() . '.' . $ext;
+                    if (move_uploaded_file($_FILES['photo']['tmp_name'], $uploadDir . $filename)) {
+                        $photoPath = 'storage/staff/' . $filename;
+                    }
+                }
+            }
+            if ($photoPath) {
+                $stmt = $conn->prepare("UPDATE teachers SET full_name=?, email=?, phone=?, photo_path=? WHERE id=? AND school_id=?");
+                $stmt->bind_param('ssssii', $full_name, $email, $phone, $photoPath, $id, $schoolId);
+            } else {
+                $stmt = $conn->prepare("UPDATE teachers SET full_name=?, email=?, phone=? WHERE id=? AND school_id=?");
+                $stmt->bind_param('sssii', $full_name, $email, $phone, $id, $schoolId);
+            }
             $stmt->execute();
             $stmt->close();
 
@@ -80,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Fetch all teachers
 $teachers = [];
 $stmt = $conn->prepare("
-    SELECT t.id, t.full_name, t.email, t.phone, t.created_at,
+    SELECT t.id, t.full_name, t.email, t.phone, t.photo_path, t.created_at,
            CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END AS has_login
     FROM teachers t
     LEFT JOIN users u ON u.email = t.email AND u.school_id = t.school_id AND u.role = 'teacher'
@@ -190,6 +208,12 @@ window.__sendEmailVerification = sendEmailVerification;
                 <input type="text" id="new-phone" placeholder="+1 555 000 0000"
                        class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition">
             </div>
+            <!-- Photo -->
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Photo</label>
+                <input type="file" id="new-teacher-photo" accept="image/jpeg,image/png,image/gif,image/webp"
+                       class="block w-full text-sm text-slate-500 file:mr-2 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-sm file:font-medium hover:file:bg-indigo-100">
+            </div>
             <!-- Email -->
             <div>
                 <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Login Email *</label>
@@ -261,9 +285,24 @@ window.__sendEmailVerification = sendEmailVerification;
         <span class="text-sm font-semibold text-indigo-800">Editing: <?= htmlspecialchars($edit['full_name']) ?></span>
         <span class="ml-auto text-[11px] text-indigo-500">Password cannot be changed here — use Firebase console</span>
     </div>
-    <form method="post" class="p-5">
+    <form method="post" enctype="multipart/form-data" class="p-5">
         <input type="hidden" name="action" value="update">
         <input type="hidden" name="id" value="<?= (int)$edit['id'] ?>">
+
+        <div class="flex items-center gap-6 mb-4">
+            <div class="w-20 h-20 rounded-xl border-2 border-slate-200 flex items-center justify-center bg-slate-50 overflow-hidden shrink-0">
+                <?php if (!empty($edit['photo_path']) && file_exists(dirname(__DIR__) . '/' . $edit['photo_path'])): ?>
+                <img src="../<?= htmlspecialchars($edit['photo_path']) ?>" alt="" class="w-full h-full object-cover">
+                <?php else: ?>
+                <i data-lucide="user" class="w-10 h-10 text-slate-300"></i>
+                <?php endif; ?>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Photo</label>
+                <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp"
+                       class="block w-full text-sm text-slate-500 file:mr-2 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-sm file:font-medium hover:file:bg-indigo-100">
+            </div>
+        </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
@@ -469,7 +508,20 @@ async function createTeacher() {
             throw new Error(data.error || 'Server error');
         }
 
-        // Step 4: Send email verification
+        // Step 4: Upload photo if selected
+        const photoInput = document.getElementById('new-teacher-photo');
+        if (photoInput && photoInput.files && photoInput.files[0] && data.teacher_id) {
+            const fd = new FormData();
+            fd.append('type', 'teacher');
+            fd.append('id', data.teacher_id);
+            fd.append('photo', photoInput.files[0]);
+            try {
+                const up = await fetch('../api/upload_staff_photo.php', { method: 'POST', body: fd });
+                if (!up.ok) { /* non-fatal */ }
+            } catch(e) { /* non-fatal */ }
+        }
+
+        // Step 5: Send email verification
         try { await window.__sendEmailVerification(cred.user); } catch(e) { /* non-fatal */ }
 
         succText.textContent = `Teacher "${name}" created! They can now log in using their email and password.`;
@@ -477,8 +529,10 @@ async function createTeacher() {
 
         // Reset form
         ['new-name','new-phone','new-email','new-password','new-password-confirm'].forEach(id => {
-            document.getElementById(id).value = '';
+            const el = document.getElementById(id);
+            if (el) el.value = '';
         });
+        if (photoInput) photoInput.value = '';
 
         // Reload after 2s to show in table
         setTimeout(() => location.reload(), 2000);
