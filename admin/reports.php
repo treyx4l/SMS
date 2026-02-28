@@ -76,7 +76,9 @@ $s->close();
             <i data-lucide="bar-chart-2" class="w-4 h-4 text-indigo-500"></i>
         </div>
         <?php if ($classBreakdown): ?>
-        <canvas id="classChart" style="height:220px;"></canvas>
+        <div class="relative w-full overflow-hidden" style="height:220px; min-height:220px; max-height:220px;">
+            <canvas id="classChart" class="block w-full" style="height:220px !important; max-height:220px;"></canvas>
+        </div>
         <?php else: ?>
         <div class="flex flex-col items-center justify-center h-40 text-slate-400">
             <i data-lucide="inbox" class="w-8 h-8 mb-2"></i>
@@ -164,7 +166,7 @@ new Chart(ctx, {
         labels: <?= json_encode(array_column($classBreakdown, 'class_name')) ?>,
         datasets: [{
             label: 'Students',
-            data: <?= json_encode(array_column($classBreakdown, 'student_count')) ?>,
+            data: <?= json_encode(array_map('intval', array_column($classBreakdown, 'student_count'))) ?>,
             backgroundColor: 'rgba(99,102,241,0.15)',
             borderColor: '#6366f1',
             borderWidth: 1.5,
@@ -172,11 +174,13 @@ new Chart(ctx, {
         }]
     },
     options: {
-        responsive: true, maintainAspectRatio: false,
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 0, right: 0, bottom: 0, left: 0 } },
         plugins: { legend: { display: false } },
         scales: {
             y: { beginAtZero: true, ticks: { precision: 0, font:{size:11}, color:'#94a3b8' }, grid:{color:'#f1f5f9'} },
-            x: { ticks: { font:{size:11}, color:'#94a3b8' }, grid:{display:false} }
+            x: { ticks: { font:{size:11}, color:'#94a3b8', maxRotation: 45 }, grid:{display:false} }
         }
     }
 });

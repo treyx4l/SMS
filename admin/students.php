@@ -75,6 +75,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->close();
                 $success = 'Student updated successfully.';
             } else {
+                // Cap: max students per school
+                $capStmt = $conn->prepare("SELECT COUNT(*) FROM students WHERE school_id = ?");
+                $capStmt->bind_param('i', $schoolId);
+                $capStmt->execute();
+                $currentCount = (int) $capStmt->get_result()->fetch_row()[0];
+                $capStmt->close();
+                if ($currentCount >= SCHOOL_LIMIT_STUDENTS) {
+                    $errors[] = 'This school has reached the maximum of ' . SCHOOL_LIMIT_STUDENTS . ' students.';
+                }
+                if ($errors) { /* skip insert */ } else {
                 // Insert
                 $cols = $hasIndexNo
                     ? "school_id, first_name, last_name, gender, index_no, class_id, phone, fingerprint_data"
@@ -96,6 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute();
                 $stmt->close();
                 $success = 'Student added successfully.';
+                }
             }
         }
     } elseif ($action === 'delete') {
@@ -119,18 +130,55 @@ $res = $stmt->get_result();
 while ($row = $res->fetch_assoc()) $classes[] = $row;
 $stmt->close();
 
-// Fetch students (support both index_no and admission_no)
+// Search (server-side, overrides pagination content)
+$searchQ = trim($_GET['q'] ?? '');
+$searchParam = $searchQ !== '' ? '%' . $searchQ . '%' : null;
+
+// Pagination
+$perPage = 15;
+$page = max(1, (int)($_GET['page'] ?? 1));
+$offset = ($page - 1) * $perPage;
+
+$idColForSearch = $hasIndexNo ? 's.index_no' : 's.admission_no';
+if ($searchParam !== null) {
+    $stmt = $conn->prepare("SELECT COUNT(*) FROM students s WHERE s.school_id = ? AND (s.first_name LIKE ? OR s.last_name LIKE ? OR {$idColForSearch} LIKE ?)");
+    $stmt->bind_param('isss', $schoolId, $searchParam, $searchParam, $searchParam);
+} else {
+    $stmt = $conn->prepare("SELECT COUNT(*) FROM students WHERE school_id = ?");
+    $stmt->bind_param('i', $schoolId);
+}
+$stmt->execute();
+$totalRows = (int) $stmt->get_result()->fetch_row()[0];
+$stmt->close();
+$totalPages = $totalRows ? (int) ceil($totalRows / $perPage) : 1;
+$page = min($page, max(1, $totalPages));
+
+// Fetch students (with optional search)
 $students = [];
 $idColSel = $hasIndexNo ? "s.index_no" : "s.admission_no AS index_no";
 $extraCols = $hasIndexNo ? ", s.photo_path, s.fingerprint_data, s.class_id" : ", s.class_id";
-$sql  = "SELECT s.id, s.first_name, s.last_name, s.gender, {$idColSel}, s.phone{$extraCols},
+$where = "s.school_id = ?";
+$params = [$schoolId];
+$types = 'i';
+if ($searchParam !== null) {
+    $where .= " AND (s.first_name LIKE ? OR s.last_name LIKE ? OR {$idColForSearch} LIKE ?)";
+    $params[] = $searchParam;
+    $params[] = $searchParam;
+    $params[] = $searchParam;
+    $types .= 'sss';
+}
+$params[] = $perPage;
+$params[] = $offset;
+$types .= 'ii';
+$sql = "SELECT s.id, s.first_name, s.last_name, s.gender, {$idColSel}, s.phone{$extraCols},
          c.name AS class_name, c.section
          FROM students s
          LEFT JOIN classes c ON c.id = s.class_id
-         WHERE s.school_id = ?
-         ORDER BY s.created_at DESC";
+         WHERE {$where}
+         ORDER BY s.created_at DESC
+         LIMIT ? OFFSET ?";
 $stmt = $conn->prepare($sql);
-$stmt->bind_param('i', $schoolId);
+$stmt->bind_param($types, ...$params);
 $stmt->execute();
 $result = $stmt->get_result();
 while ($row = $result->fetch_assoc()) $students[] = $row;
@@ -142,7 +190,7 @@ $stmt->close();
 <div class="flex items-center justify-between mb-4">
     <div>
         <h2 class="text-base font-semibold text-slate-800">Students</h2>
-        <p class="text-xs text-slate-400 mt-0.5"><?= count($students) ?> student(s)</p>
+        <p class="text-xs text-slate-400 mt-0.5"><?= $totalRows ?> student(s)<?= $totalPages > 1 ? ' · Page ' . $page . ' of ' . $totalPages : '' ?></p>
     </div>
     <div class="flex items-center gap-2">
         <button type="button" onclick="openModal('addModal')"
@@ -165,15 +213,21 @@ $stmt->close();
 </div>
 <?php endif; ?>
 
-<!-- Search bar -->
+<!-- Search bar (server-side: searches all students) -->
 <div class="mb-4">
-    <div class="relative max-w-sm">
-        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+    <form method="get" action="students.php" class="relative max-w-sm">
+        <input type="hidden" name="page" value="1">
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
             <i data-lucide="search" class="w-4 h-4"></i>
         </span>
-        <input type="text" id="studentSearch" placeholder="Search by name or index number&hellip;"
+        <input type="text" name="q" id="studentSearch" placeholder="Search by name or index number&hellip;"
+               value="<?= htmlspecialchars($searchQ) ?>"
                class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-    </div>
+        <button type="submit" class="sr-only">Search</button>
+    </form>
+    <?php if ($searchQ !== ''): ?>
+    <p class="text-xs text-slate-500 mt-1">Showing results for &ldquo;<?= htmlspecialchars($searchQ) ?>&rdquo; (<?= $totalRows ?> match<?= $totalRows !== 1 ? 'es' : '' ?>)</p>
+    <?php endif; ?>
 </div>
 
 <!-- Students table -->
@@ -235,6 +289,31 @@ $stmt->close();
             </tbody>
         </table>
     </div>
+    <?php if ($totalPages > 1): ?>
+    <div class="px-4 py-3 border-t border-slate-100 flex items-center justify-between">
+        <p class="text-xs text-slate-500">
+            Showing <?= $totalRows ? $offset + 1 : 0 ?>–<?= min($offset + $perPage, $totalRows) ?> of <?= $totalRows ?>
+        </p>
+        <div class="flex items-center gap-1">
+            <?php
+            $baseUrl = 'students.php?';
+            $query = array_filter($_GET);
+            unset($query['page']);
+            $baseQuery = $query ? http_build_query($query) . '&' : '';
+            if ($page > 1): ?>
+            <a href="<?= $baseUrl . $baseQuery ?>page=<?= $page - 1 ?>" class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">Prev</a>
+            <?php endif;
+            $start = max(1, $page - 2);
+            $end = min($totalPages, $page + 2);
+            for ($i = $start; $i <= $end; $i++): ?>
+            <a href="<?= $baseUrl . $baseQuery ?>page=<?= $i ?>" class="inline-flex w-8 h-8 items-center justify-center text-xs font-medium rounded-lg <?= $i === $page ? 'bg-indigo-600 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50' ?>"><?= $i ?></a>
+            <?php endfor;
+            if ($page < $totalPages): ?>
+            <a href="<?= $baseUrl . $baseQuery ?>page=<?= $page + 1 ?>" class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">Next</a>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
 </div>
 
 <?php
@@ -431,16 +510,7 @@ foreach ($classes as $c) {
 function openModal(id) { document.getElementById(id).classList.remove('hidden'); lucide.createIcons(); }
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
-document.getElementById('studentSearch')?.addEventListener('input', function() {
-    const q = this.value.toLowerCase().trim();
-    document.querySelectorAll('.student-row').forEach(function(row) {
-        const name = row.getAttribute('data-name') || '';
-        const index = row.getAttribute('data-index') || '';
-        const show = !q || name.includes(q) || index.includes(q);
-        row.style.display = show ? '' : 'none';
-    });
-});
-
+// Search is server-side via form GET q=
 function viewStudent(s) {
     const html = `
         <div class="flex items-center gap-4 mb-4">

@@ -124,7 +124,7 @@ require_once __DIR__ . '/config.php';
 
     <!-- Footer -->
     <footer class="px-6 py-4 bg-white border-t border-slate-200 text-center text-xs text-slate-400">
-        &copy; <?= date('Y') ?> Axis SMS. Secure login powered by Firebase.
+        &copy; <?= date('Y') ?> Axis SMS. Admin uses Firebase; staff use local database.
     </footer>
 
     <script>
@@ -167,22 +167,12 @@ require_once __DIR__ . '/config.php';
     </script>
 
 <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-
-    const firebaseConfig = {
-        apiKey: "<?= htmlspecialchars(getenv('FIREBASE_API_KEY')) ?>",
-        authDomain: "<?= htmlspecialchars(getenv('FIREBASE_AUTH_DOMAIN')) ?>",
-        projectId: "<?= htmlspecialchars(getenv('FIREBASE_PROJECT_ID')) ?>",
-    };
-
-    const app  = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-
     const form    = document.getElementById('login-form');
     const btn     = document.getElementById('login-btn');
     const errEl   = document.getElementById('login-error');
     const errText = document.getElementById('login-error-text');
+
+    const defaultBtnHtml = `<i data-lucide="log-in" class="w-4 h-4"></i> Sign in`;
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -190,28 +180,45 @@ require_once __DIR__ . '/config.php';
         btn.innerHTML = `<svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg> Signing in…`;
         errEl.classList.add('hidden');
 
-        const email    = document.getElementById('login-email').value;
+        const email    = document.getElementById('login-email').value.trim();
         const password = document.getElementById('login-password').value;
         const role     = document.getElementById('login-role').value;
 
         try {
-            const cred    = await signInWithEmailAndPassword(auth, email, password);
-            const idToken = await cred.user.getIdToken();
+            let body;
+            if (role === 'admin') {
+                // Admin: Firebase auth only
+                const { initializeApp } = await import("https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js");
+                const { getAuth, signInWithEmailAndPassword } = await import("https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js");
+                const app = initializeApp({
+                    apiKey: "<?= htmlspecialchars(getenv('FIREBASE_API_KEY')) ?>",
+                    authDomain: "<?= htmlspecialchars(getenv('FIREBASE_AUTH_DOMAIN')) ?>",
+                    projectId: "<?= htmlspecialchars(getenv('FIREBASE_PROJECT_ID')) ?>",
+                });
+                const auth = getAuth(app);
+                const cred = await signInWithEmailAndPassword(auth, email, password);
+                const idToken = await cred.user.getIdToken();
+                body = JSON.stringify({ idToken, role });
+            } else {
+                // Teacher, parent, driver, accountant: MySQL auth
+                body = JSON.stringify({ email, password, role });
+            }
 
             const response = await fetch('api/login.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ idToken, role })
+                body
             });
 
             const data = await response.json();
             if (!response.ok || !data.success) throw new Error(data.error || 'Login failed');
             window.location.href = data.redirect_url;
         } catch (err) {
-            errText.textContent = err.message || 'Firebase login failed';
+            errText.textContent = err.message || 'Login failed';
             errEl.classList.remove('hidden');
             btn.disabled = false;
-            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Sign in`;
+            btn.innerHTML = defaultBtnHtml;
+            if (window.lucide) lucide.createIcons();
         }
     });
 </script>

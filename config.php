@@ -47,3 +47,11 @@ function require_school(): int
     return $schoolId;
 }
 
+// Per-school creation limits (staff, students, classes, subjects)
+const SCHOOL_LIMIT_TEACHERS   = 50;
+const SCHOOL_LIMIT_STUDENTS    = 999;
+const SCHOOL_LIMIT_ACCOUNTANTS = 2;
+const SCHOOL_LIMIT_BUS_DRIVERS = 5;
+const SCHOOL_LIMIT_CLASSES     = 30;
+const SCHOOL_LIMIT_SUBJECTS   = 30;
+

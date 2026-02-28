@@ -43,6 +43,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->close();
                 $success = 'Subject updated.';
             } else {
+                // Cap: max subjects per school
+                $capStmt = $conn->prepare("SELECT COUNT(*) FROM subjects WHERE school_id = ?");
+                $capStmt->bind_param('i', $schoolId);
+                $capStmt->execute();
+                if ((int) $capStmt->get_result()->fetch_row()[0] >= SCHOOL_LIMIT_SUBJECTS) {
+                    $capStmt->close();
+                    $errors[] = 'This school has reached the maximum of ' . SCHOOL_LIMIT_SUBJECTS . ' subjects.';
+                } else {
+                    $capStmt->close();
                 $stmt = $conn->prepare(
                     "INSERT INTO subjects (school_id, name, code) VALUES (?, ?, ?)"
                 );
@@ -51,6 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute();
                 $stmt->close();
                 $success = 'Subject added.';
+                }
             }
         }
     } elseif ($action === 'delete') {

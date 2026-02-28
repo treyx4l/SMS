@@ -1,8 +1,7 @@
 <?php
 /**
  * api/create_teacher.php
- * Called from admin teacher form after Firebase account is created client-side.
- * Receives the new teacher's idToken + profile data, writes to users + teachers tables.
+ * Creates teacher with local MySQL auth (no Firebase).
  */
 require_once __DIR__ . '/firebase_helpers.php';
 
@@ -10,78 +9,73 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     send_json(['error' => 'Method not allowed'], 405);
 }
 
-// Ensure caller is an admin
 if (session_status() === PHP_SESSION_NONE) session_start();
 if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
     send_json(['error' => 'Forbidden — admin only'], 403);
 }
 
 $data      = read_json_input();
-$idToken   = trim($data['idToken']   ?? '');
 $fullName  = trim($data['full_name'] ?? '');
-$phone     = trim($data['phone']     ?? '');
-$address   = trim($data['address']   ?? '');
+$email     = trim($data['email'] ?? '');
+$phone     = trim($data['phone'] ?? '');
+$address   = trim($data['address'] ?? '');
+$password  = $data['password'] ?? '';
 $schoolId  = (int) ($_SESSION['school_id'] ?? 0);
 
-if ($idToken === '' || $fullName === '' || $schoolId === 0) {
-    send_json(['error' => 'Missing required fields (idToken, full_name)'], 422);
+if ($fullName === '' || $email === '' || $schoolId === 0) {
+    send_json(['error' => 'Full name and email are required'], 422);
 }
-
-// Verify the Firebase token for the newly created teacher account
-$verified = verify_firebase_id_token($idToken);
-if (!$verified) {
-    send_json(['error' => 'Invalid Firebase token'], 401);
-}
-
-$uid   = $verified['uid']   ?? null;
-$email = $verified['email'] ?? null;
-
-if (!$uid || !$email) {
-    send_json(['error' => 'Token missing uid or email'], 400);
+if (strlen($password) < 6) {
+    send_json(['error' => 'Password must be at least 6 characters'], 422);
 }
 
 $conn = get_db_connection();
 
-// Check if this Firebase UID is already registered
-$stmt = $conn->prepare("SELECT id FROM users WHERE firebase_uid = ?");
-$stmt->bind_param('s', $uid);
+// Cap: max teachers per school
+$cap = $conn->prepare("SELECT COUNT(*) FROM teachers WHERE school_id = ?");
+$cap->bind_param('i', $schoolId);
+$cap->execute();
+if ((int) $cap->get_result()->fetch_row()[0] >= SCHOOL_LIMIT_TEACHERS) {
+    $cap->close();
+    send_json(['error' => 'This school has reached the maximum of ' . SCHOOL_LIMIT_TEACHERS . ' teachers.'], 422);
+}
+$cap->close();
+
+$stmt = $conn->prepare("SELECT id FROM teachers WHERE email = ? AND school_id = ?");
+$stmt->bind_param('si', $email, $schoolId);
 $stmt->execute();
-$existing = $stmt->get_result()->fetch_assoc();
+if ($stmt->get_result()->fetch_assoc()) {
+    $stmt->close();
+    send_json(['error' => 'A teacher with this email already exists in this school'], 409);
+}
 $stmt->close();
 
-if ($existing) {
-    send_json(['error' => 'An account with this email already exists in this school'], 409);
-}
+$passwordHash = password_hash($password, PASSWORD_DEFAULT);
 
-// --- Transaction: insert into users AND teachers ---
 $conn->begin_transaction();
-
 try {
-    // 1. Insert into users table (this is what allows login)
+    $stmt = $conn->prepare(
+        "INSERT INTO teachers (school_id, full_name, email, phone, address, password_hash)
+         VALUES (?, ?, ?, ?, ?, ?)"
+    );
+    $stmt->bind_param('isssss', $schoolId, $fullName, $email, $phone, $address, $passwordHash);
+    $stmt->execute();
+    $teacherId = (int) $stmt->insert_id;
+    $stmt->close();
+
+    $localUid = 'local:teacher:' . $teacherId;
     $stmt = $conn->prepare(
         "INSERT INTO users (school_id, firebase_uid, email, full_name, role)
          VALUES (?, ?, ?, ?, 'teacher')"
     );
-    $stmt->bind_param('isss', $schoolId, $uid, $email, $fullName);
+    $stmt->bind_param('isss', $schoolId, $localUid, $email, $fullName);
     $stmt->execute();
-    $userId = (int) $stmt->insert_id;
-    $stmt->close();
-
-    // 2. Insert into teachers table (detailed profile)
-    $stmt = $conn->prepare(
-        "INSERT INTO teachers (school_id, full_name, email, phone, address)
-         VALUES (?, ?, ?, ?, ?)"
-    );
-    $stmt->bind_param('issss', $schoolId, $fullName, $email, $phone, $address);
-    $stmt->execute();
-    $teacherId = (int) $stmt->insert_id;
     $stmt->close();
 
     $conn->commit();
 
     send_json([
         'success'    => true,
-        'user_id'    => $userId,
         'teacher_id' => $teacherId,
         'message'    => "Teacher account created for {$fullName}",
     ]);

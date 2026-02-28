@@ -8,7 +8,7 @@ $schoolId = current_school_id();
 $errors  = [];
 $success = null;
 
-// Handle POST: update or delete (new driver via Firebase + api/create_driver.php)
+// Handle POST: update or delete (new driver via api/create_driver.php, local MySQL auth)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
@@ -54,12 +54,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute();
             $stmt->close();
 
-            if ($oldEmail !== '') {
-                $stmt = $conn->prepare("UPDATE users SET full_name=?, email=? WHERE email=? AND school_id=? AND role='driver'");
-                $stmt->bind_param('sssi', $full_name, $email, $oldEmail, $schoolId);
-                $stmt->execute();
-                $stmt->close();
-            }
+            $localUid = 'local:driver:' . $id;
+            $stmt = $conn->prepare("UPDATE users SET full_name=?, email=? WHERE firebase_uid=? AND school_id=? AND role='driver'");
+            $stmt->bind_param('sssi', $full_name, $email, $localUid, $schoolId);
+            $stmt->execute();
+            $stmt->close();
 
             $success = 'Driver updated successfully.';
         }
@@ -72,37 +71,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $row = $stmt->get_result()->fetch_assoc();
             $stmt->close();
 
+            $localUid = 'local:driver:' . $id;
+            $stmt = $conn->prepare("DELETE FROM users WHERE firebase_uid=? AND school_id=? AND role='driver'");
+            $stmt->bind_param('si', $localUid, $schoolId);
+            $stmt->execute();
+            $stmt->close();
+
             $stmt = $conn->prepare("DELETE FROM bus_drivers WHERE id=? AND school_id=?");
             $stmt->bind_param('ii', $id, $schoolId);
             $stmt->execute();
             $stmt->close();
-
-            if ($row && $row['email']) {
-                $stmt = $conn->prepare("DELETE FROM users WHERE email=? AND school_id=? AND role='driver'");
-                $stmt->bind_param('si', $row['email'], $schoolId);
-                $stmt->execute();
-                $stmt->close();
-            }
 
             $success = 'Driver removed. Their login access has been revoked.';
         }
     }
 }
 
-// Fetch drivers with has_login
+// Search (server-side)
+$searchQ = trim($_GET['q'] ?? '');
+$searchParam = $searchQ !== '' ? '%' . $searchQ . '%' : null;
+
+// Pagination
+$perPage   = 15;
+$page      = max(1, (int) ($_GET['page'] ?? 1));
+if ($searchParam !== null) {
+    $stmt = $conn->prepare("SELECT COUNT(*) FROM bus_drivers d WHERE d.school_id = ? AND (d.full_name LIKE ? OR d.email LIKE ? OR d.phone LIKE ?)");
+    $stmt->bind_param('isss', $schoolId, $searchParam, $searchParam, $searchParam);
+} else {
+    $stmt = $conn->prepare("SELECT COUNT(*) FROM bus_drivers WHERE school_id = ?");
+    $stmt->bind_param('i', $schoolId);
+}
+$stmt->execute();
+$totalRows = (int) $stmt->get_result()->fetch_row()[0];
+$stmt->close();
+$totalPages = $totalRows > 0 ? (int) ceil($totalRows / $perPage) : 1;
+$page      = min($page, $totalPages);
+$offset    = ($page - 1) * $perPage;
+
+// Fetch drivers with has_login (paginated, optional search)
 $drivers = [];
+$where = "d.school_id = ?";
+$params = [$schoolId];
+$types = 'i';
+if ($searchParam !== null) {
+    $where .= " AND (d.full_name LIKE ? OR d.email LIKE ? OR d.phone LIKE ?)";
+    $params[] = $searchParam;
+    $params[] = $searchParam;
+    $params[] = $searchParam;
+    $types .= 'sss';
+}
+$params[] = $perPage;
+$params[] = $offset;
+$types .= 'ii';
 $stmt = $conn->prepare("
     SELECT d.id, d.full_name, d.email, d.phone, d.address, d.created_at,
            CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END AS has_login
     FROM bus_drivers d
-    LEFT JOIN users u ON u.email = d.email AND u.school_id = d.school_id AND u.role = 'driver'
-    WHERE d.school_id = ?
+    LEFT JOIN users u ON u.firebase_uid = CONCAT('local:driver:', d.id) AND u.school_id = d.school_id AND u.role = 'driver'
+    WHERE {$where}
     ORDER BY d.created_at DESC
+    LIMIT ? OFFSET ?
 ");
-$stmt->bind_param('i', $schoolId);
+$stmt->bind_param($types, ...$params);
 $stmt->execute();
 $res = $stmt->get_result();
 while ($row = $res->fetch_assoc()) $drivers[] = $row;
+$stmt->close();
+
+$withLogin = 0;
+$stmt = $conn->prepare("SELECT COUNT(*) FROM bus_drivers d INNER JOIN users u ON u.firebase_uid = CONCAT('local:driver:', d.id) AND u.school_id = d.school_id AND u.role = 'driver' WHERE d.school_id = ?");
+$stmt->bind_param('i', $schoolId);
+$stmt->execute();
+$withLogin = (int) $stmt->get_result()->fetch_row()[0];
 $stmt->close();
 
 $edit = null;
@@ -115,26 +155,8 @@ if (isset($_GET['edit_id'])) {
     $stmt->close();
 }
 
-$total     = count($drivers);
-$withLogin = count(array_filter($drivers, fn($d) => $d['has_login']));
+$total = $totalRows;
 ?>
-
-<script type="module" id="firebase-module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, sendEmailVerification } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-
-const firebaseConfig = {
-    apiKey:    "<?= htmlspecialchars(getenv('FIREBASE_API_KEY')) ?>",
-    authDomain:"<?= htmlspecialchars(getenv('FIREBASE_AUTH_DOMAIN')) ?>",
-    projectId: "<?= htmlspecialchars(getenv('FIREBASE_PROJECT_ID')) ?>",
-};
-
-const app  = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-window.__axisAuth = auth;
-window.__createUserWithEmailAndPassword = createUserWithEmailAndPassword;
-window.__sendEmailVerification = sendEmailVerification;
-</script>
 
 <div class="flex items-center justify-between">
     <div>
@@ -170,7 +192,7 @@ window.__sendEmailVerification = sendEmailVerification;
     <div class="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-100 bg-slate-50">
         <i data-lucide="user-plus" class="w-4 h-4 text-indigo-600"></i>
         <span class="text-sm font-semibold text-slate-800">Add New Driver</span>
-        <span class="ml-auto text-[11px] text-slate-400">Creates a Firebase login account</span>
+        <span class="ml-auto text-[11px] text-slate-400">Creates local login (MySQL)</span>
     </div>
 
     <div class="p-5">
@@ -224,7 +246,7 @@ window.__sendEmailVerification = sendEmailVerification;
         <div class="flex items-center gap-2 px-3 py-2.5 bg-blue-50 border border-blue-100 rounded-lg mb-4">
             <i data-lucide="info" class="w-3.5 h-3.5 text-blue-500 shrink-0"></i>
             <p class="text-[11px] text-blue-700">
-                This creates a <strong>Firebase login account</strong> for the driver. They can sign in at the login page.
+                Creates a local login account. They sign in at the login page with email and password (select Bus Driver).
             </p>
         </div>
 
@@ -307,12 +329,15 @@ window.__sendEmailVerification = sendEmailVerification;
 
 <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
     <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
-        <div class="relative">
-            <input type="text" id="driverSearch" placeholder="Search drivers…"
+        <form method="get" action="drivers.php" class="relative flex items-center gap-2">
+            <input type="hidden" name="page" value="1">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"><i data-lucide="search" class="w-3.5 h-3.5"></i></span>
+            <input type="text" name="q" id="driverSearch" placeholder="Search by name, email, phone…"
+                   value="<?= htmlspecialchars($searchQ) ?>"
                    class="pl-8 pr-4 py-1.5 text-xs border border-slate-200 rounded-lg bg-gray-50 w-52 focus:ring-2 focus:ring-indigo-500">
-            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><i data-lucide="search" class="w-3.5 h-3.5"></i></span>
-        </div>
-        <span class="text-xs text-slate-400"><?= $total ?> total</span>
+            <button type="submit" class="text-xs font-medium text-indigo-600 hover:text-indigo-700">Search</button>
+        </form>
+        <span class="text-xs text-slate-400"><?= $total ?> total<?= $searchQ !== '' ? ' (search)' : '' ?></span>
     </div>
 
     <div class="overflow-x-auto">
@@ -383,18 +408,37 @@ window.__sendEmailVerification = sendEmailVerification;
             </tbody>
         </table>
     </div>
+    <?php if ($totalPages > 1): ?>
+    <div class="px-4 py-3 border-t border-slate-100 flex items-center justify-between">
+        <p class="text-xs text-slate-500">
+            Showing <?= $totalRows ? $offset + 1 : 0 ?>–<?= min($offset + $perPage, $totalRows) ?> of <?= $totalRows ?>
+        </p>
+        <div class="flex items-center gap-1">
+            <?php
+            $baseUrl = 'drivers.php?';
+            $query = $_GET;
+            unset($query['page']);
+            $baseQuery = $query ? http_build_query($query) . '&' : '';
+            if ($page > 1): ?>
+            <a href="<?= $baseUrl . $baseQuery ?>page=<?= $page - 1 ?>" class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">Prev</a>
+            <?php endif;
+            $start = max(1, $page - 2);
+            $end = min($totalPages, $page + 2);
+            for ($i = $start; $i <= $end; $i++): ?>
+            <a href="<?= $baseUrl . $baseQuery ?>page=<?= $i ?>" class="inline-flex w-8 h-8 items-center justify-center text-xs font-medium rounded-lg <?= $i === $page ? 'bg-indigo-600 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50' ?>"><?= $i ?></a>
+            <?php endfor;
+            if ($page < $totalPages): ?>
+            <a href="<?= $baseUrl . $baseQuery ?>page=<?= $page + 1 ?>" class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">Next</a>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
 </div>
 
 <?php require_once __DIR__ . '/footer.php'; ?>
 <script>lucide.createIcons();</script>
 <script>
-document.getElementById('driverSearch')?.addEventListener('input', function() {
-    const q = this.value.toLowerCase();
-    document.querySelectorAll('.driver-row').forEach(row => {
-        const name = row.querySelector('.driver-name')?.textContent.toLowerCase() ?? '';
-        row.style.display = name.includes(q) ? '' : 'none';
-    });
-});
+// Search is server-side via form GET q=
 
 async function createDriver() {
     const btn     = document.getElementById('add-driver-btn');
@@ -433,21 +477,14 @@ async function createDriver() {
     btn.innerHTML = '<svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg> Creating…';
 
     try {
-        const auth = window.__axisAuth;
-        const createFn = window.__createUserWithEmailAndPassword;
-        const cred = await createFn(auth, email, password);
-        const idToken = await cred.user.getIdToken();
-
         const resp = await fetch('../api/create_driver.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ idToken, full_name: name, email, phone, address })
+            body: JSON.stringify({ full_name: name, email, phone, address, password })
         });
         const data = await resp.json();
 
-        if (!resp.ok || !data.success) {
-            throw new Error(data.error || 'Server error');
-        }
+        if (!resp.ok || !data.success) throw new Error(data.error || 'Server error');
 
         const photoInput = document.getElementById('new-driver-photo');
         if (photoInput && photoInput.files && photoInput.files[0] && data.driver_id) {
@@ -458,9 +495,7 @@ async function createDriver() {
             try { await fetch('../api/upload_staff_photo.php', { method: 'POST', body: fd }); } catch(e) {}
         }
 
-        try { await window.__sendEmailVerification(cred.user); } catch(e) {}
-
-        succText.textContent = 'Driver "' + name + '" created! They can log in using their email and password.';
+        succText.textContent = 'Driver "' + name + '" created! They can log in with email and password.';
         succEl.classList.remove('hidden');
 
         ['new-name','new-phone','new-address','new-email','new-password','new-password-confirm'].forEach(id => {

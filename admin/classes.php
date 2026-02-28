@@ -67,6 +67,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $success = 'Class updated.';
             } else {
+                // Cap: max classes per school
+                $capStmt = $conn->prepare("SELECT COUNT(*) FROM classes WHERE school_id = ?");
+                $capStmt->bind_param('i', $schoolId);
+                $capStmt->execute();
+                if ((int) $capStmt->get_result()->fetch_row()[0] >= SCHOOL_LIMIT_CLASSES) {
+                    $capStmt->close();
+                    $errors[] = 'This school has reached the maximum of ' . SCHOOL_LIMIT_CLASSES . ' classes.';
+                } else {
+                    $capStmt->close();
                 $stmt = $conn->prepare(
                     "INSERT INTO classes (school_id, name, section) VALUES (?, ?, ?)"
                 );
@@ -85,6 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 $success = 'Class added.';
+                }
             }
         }
     } elseif ($action === 'delete') {

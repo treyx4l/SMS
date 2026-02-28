@@ -11,58 +11,61 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
 }
 
 $data     = read_json_input();
-$idToken  = trim($data['idToken'] ?? '');
 $fullName = trim($data['full_name'] ?? '');
 $email    = trim($data['email'] ?? '');
 $phone    = trim($data['phone'] ?? '');
 $address  = trim($data['address'] ?? '');
+$password = $data['password'] ?? '';
 $schoolId = (int) ($_SESSION['school_id'] ?? 0);
 
-if ($idToken === '' || $fullName === '' || $schoolId === 0) {
-    send_json(['error' => 'Missing required fields (idToken, full_name)'], 422);
+if ($fullName === '' || $email === '' || $schoolId === 0) {
+    send_json(['error' => 'Full name and email are required'], 422);
 }
-
-$verified = verify_firebase_id_token($idToken);
-if (!$verified) {
-    send_json(['error' => 'Invalid Firebase token'], 401);
-}
-
-$uid   = $verified['uid'] ?? null;
-$email = $verified['email'] ?? $email;
-
-if (!$uid || !$email) {
-    send_json(['error' => 'Token missing uid or email'], 400);
+if (strlen($password) < 6) {
+    send_json(['error' => 'Password must be at least 6 characters'], 422);
 }
 
 $conn = get_db_connection();
 
-$stmt = $conn->prepare("SELECT id FROM users WHERE firebase_uid = ?");
-$stmt->bind_param('s', $uid);
+// Cap: max bus drivers per school
+$cap = $conn->prepare("SELECT COUNT(*) FROM bus_drivers WHERE school_id = ?");
+$cap->bind_param('i', $schoolId);
+$cap->execute();
+if ((int) $cap->get_result()->fetch_row()[0] >= SCHOOL_LIMIT_BUS_DRIVERS) {
+    $cap->close();
+    send_json(['error' => 'This school has reached the maximum of ' . SCHOOL_LIMIT_BUS_DRIVERS . ' bus drivers.'], 422);
+}
+$cap->close();
+
+$stmt = $conn->prepare("SELECT id FROM bus_drivers WHERE email = ? AND school_id = ?");
+$stmt->bind_param('si', $email, $schoolId);
 $stmt->execute();
 if ($stmt->get_result()->fetch_assoc()) {
     $stmt->close();
-    send_json(['error' => 'An account with this email already exists'], 409);
+    send_json(['error' => 'A bus driver with this email already exists in this school'], 409);
 }
 $stmt->close();
 
-$conn->begin_transaction();
+$passwordHash = password_hash($password, PASSWORD_DEFAULT);
 
+$conn->begin_transaction();
 try {
+    $stmt = $conn->prepare(
+        "INSERT INTO bus_drivers (school_id, full_name, email, phone, address, password_hash)
+         VALUES (?, ?, ?, ?, ?, ?)"
+    );
+    $stmt->bind_param('isssss', $schoolId, $fullName, $email, $phone, $address, $passwordHash);
+    $stmt->execute();
+    $driverId = (int) $stmt->insert_id;
+    $stmt->close();
+
+    $localUid = 'local:driver:' . $driverId;
     $stmt = $conn->prepare(
         "INSERT INTO users (school_id, firebase_uid, email, full_name, role)
          VALUES (?, ?, ?, ?, 'driver')"
     );
-    $stmt->bind_param('isss', $schoolId, $uid, $email, $fullName);
+    $stmt->bind_param('isss', $schoolId, $localUid, $email, $fullName);
     $stmt->execute();
-    $stmt->close();
-
-    $stmt = $conn->prepare(
-        "INSERT INTO bus_drivers (school_id, full_name, email, phone, address)
-         VALUES (?, ?, ?, ?, ?)"
-    );
-    $stmt->bind_param('issss', $schoolId, $fullName, $email, $phone, $address);
-    $stmt->execute();
-    $driverId = (int) $stmt->insert_id;
     $stmt->close();
 
     $conn->commit();

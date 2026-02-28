@@ -1,7 +1,6 @@
 <?php
 $page_title = 'Teachers';
 require_once __DIR__ . '/layout.php';
-require_once __DIR__ . '/../api/firebase_helpers.php';
 
 $conn     = get_db_connection();
 $schoolId = current_school_id();
@@ -14,25 +13,33 @@ $success = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
-    if ($action === 'update') {
-        $id        = (int) ($_POST['id'] ?? 0);
-        $full_name = trim($_POST['full_name'] ?? '');
-        $phone     = trim($_POST['phone']     ?? '');
-        $email     = trim($_POST['email']     ?? '');
+        if ($action === 'update') {
+        $id           = (int) ($_POST['id'] ?? 0);
+        $full_name    = trim($_POST['full_name'] ?? '');
+        $phone        = trim($_POST['phone']     ?? '');
+        $email        = trim($_POST['email']     ?? '');
+        $new_password = $_POST['new_password'] ?? '';
+        $new_password_confirm = $_POST['new_password_confirm'] ?? '';
 
         if ($full_name === '') {
             $errors[] = 'Full name is required.';
         }
+        if ($new_password !== '' && strlen($new_password) < 6) {
+            $errors[] = 'Password must be at least 6 characters.';
+        }
+        if ($new_password !== '' && $new_password !== $new_password_confirm) {
+            $errors[] = 'Passwords do not match.';
+        }
 
         if (!$errors && $id) {
-            // Get old email and firebase_uid BEFORE updating (for users table and Firebase)
-            $stmt = $conn->prepare("SELECT t.email AS old_email, u.firebase_uid FROM teachers t LEFT JOIN users u ON u.email = t.email AND u.school_id = t.school_id AND u.role = 'teacher' WHERE t.id = ? AND t.school_id = ?");
+            // Get old email and local uid for users table update
+            $stmt = $conn->prepare("SELECT t.email AS old_email, u.firebase_uid FROM teachers t LEFT JOIN users u ON u.firebase_uid = CONCAT('local:teacher:', t.id) AND u.school_id = t.school_id AND u.role = 'teacher' WHERE t.id = ? AND t.school_id = ?");
             $stmt->bind_param('ii', $id, $schoolId);
             $stmt->execute();
             $prev = $stmt->get_result()->fetch_assoc();
             $stmt->close();
             $oldEmail    = $prev['old_email'] ?? '';
-            $firebaseUid = $prev['firebase_uid'] ?? '';
+            $localUid    = 'local:teacher:' . $id;
 
             // Photo upload
             $photoPath = null;
@@ -48,9 +55,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
             }
-            if ($photoPath) {
+            $res = $conn->query("SHOW COLUMNS FROM teachers LIKE 'password_hash'");
+            $hasPasswordCol = $res && $res->num_rows > 0;
+            $passwordHash = null;
+            if ($hasPasswordCol && $new_password !== '') {
+                $passwordHash = password_hash($new_password, PASSWORD_DEFAULT);
+            }
+
+            if ($photoPath && $passwordHash !== null) {
+                $stmt = $conn->prepare("UPDATE teachers SET full_name=?, email=?, phone=?, photo_path=?, password_hash=? WHERE id=? AND school_id=?");
+                $stmt->bind_param('sssssii', $full_name, $email, $phone, $photoPath, $passwordHash, $id, $schoolId);
+            } elseif ($photoPath) {
                 $stmt = $conn->prepare("UPDATE teachers SET full_name=?, email=?, phone=?, photo_path=? WHERE id=? AND school_id=?");
                 $stmt->bind_param('ssssii', $full_name, $email, $phone, $photoPath, $id, $schoolId);
+            } elseif ($passwordHash !== null) {
+                $stmt = $conn->prepare("UPDATE teachers SET full_name=?, email=?, phone=?, password_hash=? WHERE id=? AND school_id=?");
+                $stmt->bind_param('ssssii', $full_name, $email, $phone, $passwordHash, $id, $schoolId);
             } else {
                 $stmt = $conn->prepare("UPDATE teachers SET full_name=?, email=?, phone=? WHERE id=? AND school_id=?");
                 $stmt->bind_param('sssii', $full_name, $email, $phone, $id, $schoolId);
@@ -58,24 +78,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute();
             $stmt->close();
 
-            // Update users table: prefer firebase_uid (reliable), else fallback to old email
-            if ($firebaseUid !== '') {
-                $stmt = $conn->prepare("UPDATE users SET full_name=?, email=? WHERE firebase_uid=? AND school_id=? AND role='teacher'");
-                $stmt->bind_param('sssi', $full_name, $email, $firebaseUid, $schoolId);
-                $stmt->execute();
-                $stmt->close();
-            } elseif ($oldEmail !== '') {
-                $stmt = $conn->prepare("UPDATE users SET full_name=?, email=? WHERE email=? AND school_id=? AND role='teacher'");
-                $stmt->bind_param('sssi', $full_name, $email, $oldEmail, $schoolId);
-                $stmt->execute();
-                $stmt->close();
-            }
-
-            // Update Firebase Auth email when it changed and we have firebase_uid
-            $emailChanged = ($oldEmail !== '' && strcasecmp(trim($oldEmail), trim($email)) !== 0);
-            if ($emailChanged && $firebaseUid !== '') {
-                update_firebase_user_email($firebaseUid, $email);
-            }
+            // Update users table (teachers use local MySQL auth)
+            $stmt = $conn->prepare("UPDATE users SET full_name=?, email=? WHERE firebase_uid=? AND school_id=? AND role='teacher'");
+            $stmt->bind_param('sssi', $full_name, $email, $localUid, $schoolId);
+            $stmt->execute();
+            $stmt->close();
 
             // Update teacher_class_subjects if table exists
             $tcsExists = (bool) ($conn->query("SHOW TABLES LIKE 'teacher_class_subjects'")->num_rows ?? 0);
@@ -131,23 +138,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch all teachers (photo_path may not exist if migration not run)
+// Search (server-side)
+$searchQ = trim($_GET['q'] ?? '');
+$searchParam = $searchQ !== '' ? '%' . $searchQ . '%' : null;
+
+// Pagination
+$perPage = 15;
+$page = max(1, (int)($_GET['page'] ?? 1));
+$offset = ($page - 1) * $perPage;
+
+if ($searchParam !== null) {
+    $stmt = $conn->prepare("SELECT COUNT(*) FROM teachers t WHERE t.school_id = ? AND (t.full_name LIKE ? OR t.email LIKE ? OR t.phone LIKE ?)");
+    $stmt->bind_param('isss', $schoolId, $searchParam, $searchParam, $searchParam);
+} else {
+    $stmt = $conn->prepare("SELECT COUNT(*) FROM teachers WHERE school_id = ?");
+    $stmt->bind_param('i', $schoolId);
+}
+$stmt->execute();
+$totalRows = (int) $stmt->get_result()->fetch_row()[0];
+$stmt->close();
+$totalPages = $totalRows ? (int) ceil($totalRows / $perPage) : 1;
+$page = min($page, max(1, $totalPages));
+
+// Fetch teachers (photo_path may not exist if migration not run)
 $teachers = [];
 $hasPhotoPath = false;
 $res = $conn->query("SHOW COLUMNS FROM teachers LIKE 'photo_path'");
 if ($res && $res->num_rows > 0) $hasPhotoPath = true;
 
 $sel = $hasPhotoPath ? 't.id, t.full_name, t.email, t.phone, t.photo_path, t.created_at' : 't.id, t.full_name, t.email, t.phone, t.created_at';
+$where = "t.school_id = ?";
+$params = [$schoolId];
+$types = 'i';
+if ($searchParam !== null) {
+    $where .= " AND (t.full_name LIKE ? OR t.email LIKE ? OR t.phone LIKE ?)";
+    $params[] = $searchParam;
+    $params[] = $searchParam;
+    $params[] = $searchParam;
+    $types .= 'sss';
+}
+$params[] = $perPage;
+$params[] = $offset;
+$types .= 'ii';
 $stmt = $conn->prepare("
     SELECT {$sel},
            CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END AS has_login
     FROM teachers t
-    LEFT JOIN users u ON u.email = t.email AND u.school_id = t.school_id AND u.role = 'teacher'
-    WHERE t.school_id = ?
+    LEFT JOIN users u ON u.firebase_uid = CONCAT('local:teacher:', t.id) AND u.school_id = t.school_id AND u.role = 'teacher'
+    WHERE {$where}
     ORDER BY t.created_at DESC
+    LIMIT ? OFFSET ?
 ");
 if ($stmt) {
-    $stmt->bind_param('i', $schoolId);
+    $stmt->bind_param($types, ...$params);
     $stmt->execute();
     $res = $stmt->get_result();
     while ($row = $res->fetch_assoc()) $teachers[] = $row;
@@ -192,27 +235,14 @@ if ($tcsExists) {
     }
 }
 
-$total      = count($teachers);
-$withLogin  = count(array_filter($teachers, fn($t) => $t['has_login']));
+$total = $totalRows;
+$withLogin = 0;
+$stmt = $conn->prepare("SELECT COUNT(*) FROM teachers t INNER JOIN users u ON u.firebase_uid = CONCAT('local:teacher:', t.id) AND u.school_id = t.school_id AND u.role = 'teacher' WHERE t.school_id = ?");
+$stmt->bind_param('i', $schoolId);
+$stmt->execute();
+$withLogin = (int) $stmt->get_result()->fetch_row()[0];
+$stmt->close();
 ?>
-
-<!-- Firebase config for creating teacher accounts -->
-<script type="module" id="firebase-module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, sendEmailVerification } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-
-const firebaseConfig = {
-    apiKey:    "<?= htmlspecialchars(getenv('FIREBASE_API_KEY')) ?>",
-    authDomain:"<?= htmlspecialchars(getenv('FIREBASE_AUTH_DOMAIN')) ?>",
-    projectId: "<?= htmlspecialchars(getenv('FIREBASE_PROJECT_ID')) ?>",
-};
-
-const app  = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-window.__axisAuth = auth;
-window.__createUserWithEmailAndPassword = createUserWithEmailAndPassword;
-window.__sendEmailVerification = sendEmailVerification;
-</script>
 
 <!-- Page header -->
 <div class="flex items-center justify-between">
@@ -251,7 +281,7 @@ window.__sendEmailVerification = sendEmailVerification;
     <div class="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-100 bg-slate-50">
         <i data-lucide="user-plus" class="w-4 h-4 text-indigo-600"></i>
         <span class="text-sm font-semibold text-slate-800">Add New Teacher</span>
-        <span class="ml-auto text-[11px] text-slate-400">Creates a Firebase login account</span>
+        <span class="ml-auto text-[11px] text-slate-400">Creates local login (MySQL)</span>
     </div>
 
     <!-- JS-driven add form -->
@@ -327,8 +357,7 @@ window.__sendEmailVerification = sendEmailVerification;
         <div class="flex items-start gap-2 px-3 py-2.5 bg-blue-50 border border-blue-100 rounded-lg mb-4">
             <i data-lucide="info" class="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5"></i>
             <p class="text-[11px] text-blue-700">
-                This creates a <strong>Firebase login account</strong> for the teacher and adds them to your school.
-                They can sign in at the login page by selecting <em>"Teacher / Staff"</em>.
+                Creates a local login account. They sign in at the login page with email and password (select <em>Teacher / Staff</em>).
             </p>
         </div>
 
@@ -350,14 +379,17 @@ window.__sendEmailVerification = sendEmailVerification;
 <!-- ── TEACHERS TABLE ── -->
 <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
     <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
-        <div class="relative">
-            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+        <form method="get" action="teachers.php" class="relative flex items-center gap-2">
+            <input type="hidden" name="page" value="1">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
                 <i data-lucide="search" class="w-3.5 h-3.5"></i>
             </span>
-            <input type="text" id="teacherSearch" placeholder="Search teachers…"
+            <input type="text" name="q" id="teacherSearch" placeholder="Search by name, email, phone…"
+                   value="<?= htmlspecialchars($searchQ) ?>"
                    class="pl-8 pr-4 py-1.5 text-xs border border-slate-200 rounded-lg bg-gray-50 text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-52 transition">
-        </div>
-        <span class="text-xs text-slate-400"><?= $total ?> total</span>
+            <button type="submit" class="text-xs font-medium text-indigo-600 hover:text-indigo-700">Search</button>
+        </form>
+        <span class="text-xs text-slate-400"><?= $total ?> total<?= $searchQ !== '' ? ' (search)' : '' ?></span>
     </div>
 
     <div class="overflow-x-auto">
@@ -452,6 +484,31 @@ window.__sendEmailVerification = sendEmailVerification;
             </tbody>
         </table>
     </div>
+    <?php if ($totalPages > 1): ?>
+    <div class="px-4 py-3 border-t border-slate-100 flex items-center justify-between">
+        <p class="text-xs text-slate-500">
+            Showing <?= $totalRows ? $offset + 1 : 0 ?>–<?= min($offset + $perPage, $totalRows) ?> of <?= $totalRows ?>
+        </p>
+        <div class="flex items-center gap-1">
+            <?php
+            $baseUrl = 'teachers.php?';
+            $query = $_GET;
+            unset($query['page']);
+            $baseQuery = $query ? http_build_query($query) . '&' : '';
+            if ($page > 1): ?>
+            <a href="<?= $baseUrl . $baseQuery ?>page=<?= $page - 1 ?>" class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">Prev</a>
+            <?php endif;
+            $start = max(1, $page - 2);
+            $end = min($totalPages, $page + 2);
+            for ($i = $start; $i <= $end; $i++): ?>
+            <a href="<?= $baseUrl . $baseQuery ?>page=<?= $i ?>" class="inline-flex w-8 h-8 items-center justify-center text-xs font-medium rounded-lg <?= $i === $page ? 'bg-indigo-600 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50' ?>"><?= $i ?></a>
+            <?php endfor;
+            if ($page < $totalPages): ?>
+            <a href="<?= $baseUrl . $baseQuery ?>page=<?= $page + 1 ?>" class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">Next</a>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
 </div>
 
 <!-- Edit Teacher Modal -->
@@ -492,6 +549,16 @@ window.__sendEmailVerification = sendEmailVerification;
                 <div>
                     <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Phone</label>
                     <input type="text" name="phone" id="editTeacherPhone"
+                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">New password (leave blank to keep)</label>
+                    <input type="password" name="new_password" id="editTeacherNewPassword" placeholder="Min. 6 characters"
+                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Confirm new password</label>
+                    <input type="password" name="new_password_confirm" id="editTeacherNewPasswordConfirm" placeholder="Repeat if changing"
                            class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
                 </div>
             </div>
@@ -547,6 +614,8 @@ function openEditTeacherModal(data) {
     document.getElementById('editTeacherName').value = data.full_name || '';
     document.getElementById('editTeacherEmail').value = data.email || '';
     document.getElementById('editTeacherPhone').value = data.phone || '';
+    document.getElementById('editTeacherNewPassword').value = '';
+    document.getElementById('editTeacherNewPasswordConfirm').value = '';
     const preview = document.getElementById('editTeacherPhotoPreview');
     if (data.photo_path && data.photo_path.trim() !== '') {
         preview.innerHTML = '<img src="../' + (data.photo_path || '').replace(/"/g, '&quot;') + '" alt="" class="w-full h-full object-cover">';
@@ -563,14 +632,7 @@ function closeEditTeacherModal() {
 }
 </script>
 <script>
-// Live search
-document.getElementById('teacherSearch').addEventListener('input', function() {
-    const q = this.value.toLowerCase();
-    document.querySelectorAll('.teacher-row').forEach(row => {
-        const name = row.querySelector('.teacher-name')?.textContent.toLowerCase() ?? '';
-        row.style.display = name.includes(q) ? '' : 'none';
-    });
-});
+// Search is server-side via form GET q=
 
 // Toggle password visibility
 function togglePw(inputId, btn) {
@@ -582,7 +644,7 @@ function togglePw(inputId, btn) {
         : '<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 }
 
-// Create teacher via Firebase + API
+// Create teacher via API (local MySQL auth)
 async function createTeacher() {
     const btn        = document.getElementById('add-teacher-btn');
     const errEl      = document.getElementById('add-error');
@@ -596,7 +658,6 @@ async function createTeacher() {
     const password = document.getElementById('new-password').value;
     const confirm  = document.getElementById('new-password-confirm').value;
 
-    // Validate
     errEl.classList.add('hidden');
     succEl.classList.add('hidden');
 
@@ -620,43 +681,25 @@ async function createTeacher() {
     btn.innerHTML = `<svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg> Creating account…`;
 
     try {
-        // Step 1: Create Firebase account
-        const auth = window.__axisAuth;
-        const createFn = window.__createUserWithEmailAndPassword;
-        const cred = await createFn(auth, email, password);
-
-        // Step 2: Get ID token
-        const idToken = await cred.user.getIdToken();
-
-        // Step 3: Send to our API to create users + teachers records
         const resp = await fetch('../api/create_teacher.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ idToken, full_name: name, phone, email })
+            body: JSON.stringify({ full_name: name, email, phone, password })
         });
         const data = await resp.json();
 
-        if (!resp.ok || !data.success) {
-            throw new Error(data.error || 'Server error');
-        }
+        if (!resp.ok || !data.success) throw new Error(data.error || 'Server error');
 
-        // Step 4: Upload photo if selected
         const photoInput = document.getElementById('new-teacher-photo');
         if (photoInput && photoInput.files && photoInput.files[0] && data.teacher_id) {
             const fd = new FormData();
             fd.append('type', 'teacher');
             fd.append('id', data.teacher_id);
             fd.append('photo', photoInput.files[0]);
-            try {
-                const up = await fetch('../api/upload_staff_photo.php', { method: 'POST', body: fd });
-                if (!up.ok) { /* non-fatal */ }
-            } catch(e) { /* non-fatal */ }
+            try { await fetch('../api/upload_staff_photo.php', { method: 'POST', body: fd }); } catch(e) {}
         }
 
-        // Step 5: Send email verification
-        try { await window.__sendEmailVerification(cred.user); } catch(e) { /* non-fatal */ }
-
-        succText.textContent = `Teacher "${name}" created! They can now log in using their email and password.`;
+        succText.textContent = `Teacher "${name}" created! They can log in with email and password.`;
         succEl.classList.remove('hidden');
 
         // Reset form

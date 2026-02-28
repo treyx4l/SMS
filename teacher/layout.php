@@ -41,14 +41,18 @@ if (isset($_SESSION['user_id'], $_SESSION['school_id'])) {
     }
 }
 
+$schoolLogoPath = null;
+$schoolAccent = '#6366f1';
 if ($schoolId) {
-    $stmt = $conn->prepare("SELECT name FROM schools WHERE id = ?");
+    $stmt = $conn->prepare("SELECT name, logo_path, accent_color FROM schools WHERE id = ?");
     $stmt->bind_param('i', $schoolId);
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
-    if (!empty($row['name'])) {
-        $schoolName = $row['name'];
+    if ($row) {
+        if (!empty($row['name'])) $schoolName = $row['name'];
+        if (!empty($row['logo_path'])) $schoolLogoPath = $row['logo_path'];
+        if (!empty($row['accent_color'])) $schoolAccent = $row['accent_color'];
     }
 }
 
@@ -81,6 +85,7 @@ function teacherNavLink(string $check, string $current): string
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <style>
         * { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif; }
+        :root { --accent: <?= htmlspecialchars($schoolAccent) ?>; }
         .sidebar-nav::-webkit-scrollbar { width: 3px; }
         .sidebar-nav::-webkit-scrollbar-track { background: transparent; }
         .sidebar-nav::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 2px; }
@@ -88,6 +93,9 @@ function teacherNavLink(string $check, string $current): string
         details > summary::-webkit-details-marker { display: none; }
         details[open] > summary .chevron { transform: rotate(90deg); }
         .chevron { transition: transform 0.15s ease; }
+        .bg-emerald-600, .bg-indigo-600, .hover\:bg-emerald-700:hover, .hover\:bg-indigo-700:hover { background-color: var(--accent) !important; }
+        .text-emerald-600, .text-indigo-600 { color: var(--accent) !important; }
+        .focus\:ring-indigo-500:focus { --tw-ring-color: var(--accent) !important; }
     </style>
     <?php if (isset($extra_head)) echo $extra_head; ?>
 </head>
@@ -98,10 +106,15 @@ function teacherNavLink(string $check, string $current): string
     <aside class="w-56 shrink-0 bg-white border-r border-slate-200 flex flex-col">
 
         <!-- Brand -->
-        <div class="px-4 py-4 border-b border-slate-100">
-            <div class="text-base font-bold text-slate-900 tracking-tight"><?= htmlspecialchars(strtoupper($schoolName)) ?></div>
-            <div class="text-[10px] font-semibold text-emerald-600 uppercase tracking-widest mt-0.5">Teacher Portal</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">Focused on classes & students</div>
+        <div class="px-4 py-4 border-b border-slate-100 flex items-center gap-3">
+            <?php if ($schoolLogoPath && file_exists(dirname(__DIR__) . '/' . $schoolLogoPath)): ?>
+            <img src="../<?= htmlspecialchars($schoolLogoPath) ?>" alt="" class="w-10 h-10 rounded-lg object-contain shrink-0">
+            <?php endif; ?>
+            <div>
+                <div class="text-base font-bold text-slate-900 tracking-tight"><?= htmlspecialchars(strtoupper($schoolName)) ?></div>
+                <div class="text-[10px] font-semibold text-emerald-600 uppercase tracking-widest mt-0.5">Teacher Portal</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Focused on classes & students</div>
+            </div>
         </div>
 
         <!-- Navigation -->
@@ -197,7 +210,12 @@ function teacherNavLink(string $check, string $current): string
 
         <!-- Top bar -->
         <header class="flex items-center justify-between px-6 py-3.5 border-b border-slate-200 bg-white relative z-10">
-            <h1 class="text-lg font-bold text-slate-900"><?= htmlspecialchars($page_title) ?></h1>
+            <div class="flex items-center gap-3">
+                <?php if ($schoolLogoPath && file_exists(dirname(__DIR__) . '/' . $schoolLogoPath)): ?>
+                <img src="../<?= htmlspecialchars($schoolLogoPath) ?>" alt="" class="h-8 w-auto max-w-[120px] object-contain">
+                <?php endif; ?>
+                <h1 class="text-lg font-bold text-slate-900"><?= htmlspecialchars($page_title) ?></h1>
+            </div>
             <div class="flex items-center gap-3">
                 <!-- Message icon (opens modal) -->
                 <button type="button"

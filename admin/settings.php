@@ -147,10 +147,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div>
             <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Accent color</label>
+            <p class="text-[11px] text-slate-500 mb-2">Choose a preset or use the color picker. This affects the entire dashboard (buttons, links, sidebar).</p>
+            <?php
+            $accentVal = $school['accent_color'] ?? '#6366f1';
+            $presets = ['#6366f1' => 'Indigo', '#0ea5e9' => 'Sky', '#10b981' => 'Emerald', '#f59e0b' => 'Amber', '#ef4444' => 'Red'];
+            ?>
+            <div class="flex flex-wrap items-center gap-2 mb-3">
+                <?php foreach ($presets as $hex => $label): ?>
+                <button type="button" onclick="setAccent('<?= $hex ?>')" title="<?= htmlspecialchars($label) ?>"
+                        class="w-9 h-9 rounded-lg border-2 <?= (strtolower($accentVal) === strtolower($hex)) ? 'border-slate-800 ring-2 ring-offset-1 ring-slate-400' : 'border-slate-200 hover:border-slate-300' ?> transition-colors"
+                        style="background-color: <?= htmlspecialchars($hex) ?>"></button>
+                <?php endforeach; ?>
+            </div>
             <div class="flex items-center gap-3">
-                <input type="color" name="accent_color" value="<?= htmlspecialchars($school['accent_color'] ?? '#1e88e5') ?>"
+                <input type="color" name="accent_color" id="accentColorInput" value="<?= htmlspecialchars($accentVal) ?>"
                        class="w-12 h-10 rounded border border-slate-200 cursor-pointer">
-                <input type="text" value="<?= htmlspecialchars($school['accent_color'] ?? '#1e88e5') ?>"
+                <input type="text" value="<?= htmlspecialchars($accentVal) ?>"
                        class="px-3 py-2 border border-slate-200 rounded-lg text-sm w-24" readonly id="colorHex">
             </div>
         </div>
@@ -194,8 +206,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <script>lucide.createIcons();</script>
 <script>
-document.querySelector('input[name="accent_color"]')?.addEventListener('input', function() {
-    document.getElementById('colorHex').value = this.value;
+var accentInput = document.getElementById('accentColorInput');
+var colorHex = document.getElementById('colorHex');
+function setAccent(hex) {
+    hex = hex.toLowerCase();
+    accentInput.value = hex;
+    colorHex.value = hex;
+}
+accentInput.addEventListener('input', function() {
+    colorHex.value = this.value;
 });
 </script>
 
