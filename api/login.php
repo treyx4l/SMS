@@ -3,6 +3,10 @@
 require_once __DIR__ . '/firebase_helpers.php';
 require_once dirname(__DIR__) . '/config.php';
 
+// Ensure PHP warnings/notices don't corrupt JSON output
+if (!headers_sent()) {
+    ini_set('display_errors', '0');
+}
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

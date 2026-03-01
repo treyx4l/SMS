@@ -2,12 +2,12 @@
 
 require_once __DIR__ . '/config_env.php';
 
-// Database configuration using env values with sensible defaults for XAMPP
 $DB_HOST     = getenv('DB_HOST') ?: '127.0.0.1';
-$DB_PORT     = getenv('DB_PORT') ?: '3306';
-$DB_DATABASE = getenv('DB_DATABASE') ?: 'axis_sms';
-$DB_USERNAME = getenv('DB_USERNAME') ?: 'root';
+$DB_PORT     = getenv('DB_PORT') ?: 3306;
+$DB_DATABASE = getenv('DB_DATABASE') ?: '';
+$DB_USERNAME = getenv('DB_USERNAME') ?: '';
 $DB_PASSWORD = getenv('DB_PASSWORD') ?: '';
+
 
 function get_db_connection(): mysqli
 {
@@ -16,7 +16,16 @@ function get_db_connection(): mysqli
     $conn = new mysqli($DB_HOST, $DB_USERNAME, $DB_PASSWORD, $DB_DATABASE, (int) $DB_PORT);
 
     if ($conn->connect_error) {
-        die('Database connection failed: ' . $conn->connect_error);
+        $msg = 'Database connection failed: ' . $conn->connect_error;
+        // For API endpoints, always respond with JSON so frontend parse doesn't break
+        $uri = $_SERVER['REQUEST_URI'] ?? '';
+        if (strpos($uri, '/api/') !== false) {
+            http_response_code(500);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => $msg]);
+            exit;
+        }
+        die($msg);
     }
 
     $conn->set_charset('utf8mb4');
