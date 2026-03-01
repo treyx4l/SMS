@@ -2,7 +2,7 @@
 
 require_once __DIR__ . '/config_env.php';
 
-$DB_HOST     = getenv('DB_HOST') ?: '127.0.0.1';
+$DB_HOST     = getenv('DB_HOST') ?: '';
 $DB_PORT     = getenv('DB_PORT') ?: 3306;
 $DB_DATABASE = getenv('DB_DATABASE') ?: '';
 $DB_USERNAME = getenv('DB_USERNAME') ?: '';
