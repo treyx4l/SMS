@@ -125,9 +125,16 @@ $res = $stmt->get_result();
 while ($row = $res->fetch_assoc()) $teachers[] = $row;
 $stmt->close();
 
-// Load entries
+// Selected class for grid view
+$selectedClassId = (int) ($_GET['class_id'] ?? ($classes[0]['id'] ?? 0));
+$selectedClass = null;
+foreach ($classes as $c) {
+    if ($c['id'] == $selectedClassId) { $selectedClass = $c; break; }
+}
+
+// Load entries for the selected class
 $entries = [];
-if ($tablesExist) {
+if ($tablesExist && $selectedClassId) {
     $stmt = $conn->prepare("
         SELECT e.id, e.class_id, e.subject_id, e.teacher_id, e.day_of_week, e.period_order,
                c.name AS class_name, c.section AS class_section,
@@ -136,10 +143,10 @@ if ($tablesExist) {
         LEFT JOIN classes c ON c.id = e.class_id
         LEFT JOIN subjects s ON s.id = e.subject_id
         LEFT JOIN teachers t ON t.id = e.teacher_id
-        WHERE e.school_id = ?
-        ORDER BY e.class_id, e.day_of_week, e.period_order
+        WHERE e.school_id = ? AND e.class_id = ?
+        ORDER BY e.day_of_week, e.period_order
     ");
-    $stmt->bind_param('i', $schoolId);
+    $stmt->bind_param('ii', $schoolId, $selectedClassId);
     $stmt->execute();
     $res = $stmt->get_result();
     while ($row = $res->fetch_assoc()) $entries[] = $row;
@@ -148,8 +155,19 @@ if ($tablesExist) {
 
 $entriesBySlot = [];
 foreach ($entries as $e) {
-    $key = "{$e['class_id']}_{$e['day_of_week']}_{$e['period_order']}";
+    $key = "{$e['day_of_week']}_{$e['period_order']}";
     $entriesBySlot[$key] = $e;
+}
+
+// Subject colors palette
+$subjectColors = [
+    '#4f46e5','#0891b2','#059669','#d97706','#dc2626','#7c3aed','#db2777','#0284c7','#16a34a','#ca8a04'
+];
+$subjectColorMap = [];
+$colorIdx = 0;
+foreach ($subjects as $s) {
+    $subjectColorMap[$s['id']] = $subjectColors[$colorIdx % count($subjectColors)];
+    $colorIdx++;
 }
 ?>
 
@@ -166,138 +184,295 @@ foreach ($entries as $e) {
 <?php else: ?>
 
 <?php if ($errors): ?>
-<div class="flex items-center gap-2.5 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+<div class="flex items-center gap-2.5 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 mb-4">
     <i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i>
     <?= htmlspecialchars(implode(' ', $errors)) ?>
 </div>
 <?php elseif ($success): ?>
-<div class="flex items-center gap-2.5 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
+<div class="flex items-center gap-2.5 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700 mb-4">
     <i data-lucide="check-circle" class="w-4 h-4 shrink-0"></i>
     <?= htmlspecialchars($success) ?>
 </div>
 <?php endif; ?>
 
-<!-- Periods config -->
-<div class="bg-white border border-slate-200 rounded-xl overflow-hidden mb-6">
-    <div class="px-5 py-3.5 border-b border-slate-100 bg-slate-50">
-        <span class="text-sm font-semibold text-slate-800">Period times</span>
-        <span class="text-xs text-slate-500 ml-2">Define start and end for each period</span>
-    </div>
-    <form method="post" class="p-5">
-        <input type="hidden" name="action" value="save_periods">
-        <div class="flex flex-wrap gap-4" id="periodsContainer">
-            <?php foreach ($periods as $i => $p): ?>
-            <div class="flex items-center gap-2">
-                <span class="text-xs font-medium text-slate-500 w-16">Period <?= (int)$p['period_order'] ?></span>
-                <input type="hidden" name="periods[<?= $i ?>][order]" value="<?= (int)$p['period_order'] ?>">
-                <input type="time" name="periods[<?= $i ?>][start]" value="<?= htmlspecialchars(substr($p['start_time'], 0, 5)) ?>" class="px-2 py-1.5 border border-slate-200 rounded text-sm">
-                <span class="text-slate-400">–</span>
-                <input type="time" name="periods[<?= $i ?>][end]" value="<?= htmlspecialchars(substr($p['end_time'], 0, 5)) ?>" class="px-2 py-1.5 border border-slate-200 rounded text-sm">
-            </div>
+<!-- Top bar: class selector + actions -->
+<div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+    <div class="flex items-center gap-3">
+        <span class="text-sm font-semibold text-slate-700">Class:</span>
+        <div class="flex flex-wrap gap-2">
+            <?php foreach ($classes as $c): ?>
+            <?php $label = $c['name'] . ($c['section'] ? ' ' . $c['section'] : ''); ?>
+            <a href="?class_id=<?= (int)$c['id'] ?>"
+               class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors
+                      <?= $c['id'] == $selectedClassId
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-400 hover:text-indigo-600' ?>">
+                <?= htmlspecialchars($label) ?>
+            </a>
             <?php endforeach; ?>
+            <?php if (empty($classes)): ?>
+            <span class="text-sm text-slate-400 italic">No classes found</span>
+            <?php endif; ?>
         </div>
-        <button type="submit" class="mt-4 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">Save periods</button>
-    </form>
+    </div>
+    <div class="flex items-center gap-2">
+        <button onclick="document.getElementById('addEntryModal').classList.remove('hidden')"
+                class="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
+            <i data-lucide="plus" class="w-4 h-4"></i> Add entry
+        </button>
+        <button onclick="document.getElementById('periodsModal').classList.remove('hidden')"
+                class="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50">
+            <i data-lucide="clock" class="w-4 h-4"></i> Periods
+        </button>
+    </div>
 </div>
 
-<!-- Add entry -->
-<div class="bg-white border border-slate-200 rounded-xl overflow-hidden mb-6">
-    <div class="px-5 py-3.5 border-b border-slate-100 bg-slate-50">
-        <span class="text-sm font-semibold text-slate-800">Add timetable entry</span>
+<?php if (empty($classes)): ?>
+<div class="bg-white border border-slate-200 rounded-xl p-12 text-center">
+    <i data-lucide="layout-grid" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
+    <p class="text-sm text-slate-500 font-medium">No classes found</p>
+    <p class="text-xs text-slate-400 mt-1">Create classes first, then build the timetable.</p>
+</div>
+<?php else: ?>
+
+<!-- Timetable Grid -->
+<div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+    <!-- Header: school timetable title bar -->
+    <div class="bg-indigo-700 text-white px-5 py-3 flex items-center justify-between">
+        <div>
+            <div class="text-xs font-semibold uppercase tracking-wider text-indigo-200">Weekly Timetable</div>
+            <div class="text-base font-bold mt-0.5">
+                <?php if ($selectedClass): ?>
+                    Class: <?= htmlspecialchars($selectedClass['name'] . ($selectedClass['section'] ? ' — ' . $selectedClass['section'] : '')) ?>
+                <?php else: ?>
+                    Select a class above
+                <?php endif; ?>
+            </div>
+        </div>
+        <i data-lucide="calendar" class="w-6 h-6 text-indigo-300"></i>
     </div>
-    <form method="post" class="p-5">
-        <input type="hidden" name="action" value="save_entry">
-        <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm border-collapse" style="min-width:720px">
+            <thead>
+                <tr>
+                    <!-- Period column header -->
+                    <th class="border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase w-28 text-center">
+                        Period / Time
+                    </th>
+                    <?php foreach ($days as $dayNum => $dayName): ?>
+                    <th class="border border-slate-200 bg-indigo-50 px-3 py-2.5 text-xs font-bold text-indigo-700 uppercase text-center">
+                        <?= $dayName ?>
+                    </th>
+                    <?php endforeach; ?>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($periods as $p): ?>
+                <?php $periodOrder = (int)$p['period_order']; ?>
+                <tr>
+                    <!-- Period label cell -->
+                    <td class="border border-slate-200 bg-slate-50 px-3 py-2 text-center align-middle">
+                        <div class="text-xs font-bold text-slate-700">Period <?= $periodOrder ?></div>
+                        <div class="text-[10px] text-slate-400 mt-0.5">
+                            <?= htmlspecialchars(substr($p['start_time'], 0, 5)) ?> – <?= htmlspecialchars(substr($p['end_time'], 0, 5)) ?>
+                        </div>
+                    </td>
+                    <?php foreach ($days as $dayNum => $dayName): ?>
+                    <?php
+                        $key = "{$dayNum}_{$periodOrder}";
+                        $entry = $entriesBySlot[$key] ?? null;
+                        $bgColor = $entry ? ($subjectColorMap[$entry['subject_id']] ?? '#6366f1') : null;
+                        $hexToRgb = function($hex) {
+                            $hex = ltrim($hex, '#');
+                            return [hexdec(substr($hex,0,2)), hexdec(substr($hex,2,2)), hexdec(substr($hex,4,2))];
+                        };
+                    ?>
+                    <td class="border border-slate-200 p-1 align-middle" style="height:80px; min-width:120px;">
+                        <?php if ($entry): ?>
+                        <?php
+                            $rgb = $hexToRgb($bgColor);
+                            $bgLight = "rgba({$rgb[0]},{$rgb[1]},{$rgb[2]},0.1)";
+                            $bgMedium = "rgba({$rgb[0]},{$rgb[1]},{$rgb[2]},0.2)";
+                        ?>
+                        <div class="rounded-lg h-full flex flex-col justify-between p-2 group relative"
+                             style="background-color: <?= $bgLight ?>; border-left: 3px solid <?= $bgColor ?>;">
+                            <div>
+                                <div class="text-xs font-bold leading-tight" style="color: <?= $bgColor ?>">
+                                    <?= htmlspecialchars($entry['subject_name']) ?>
+                                </div>
+                                <div class="text-[10px] text-slate-500 mt-0.5 leading-snug">
+                                    <?= htmlspecialchars($entry['teacher_name']) ?>
+                                </div>
+                            </div>
+                            <!-- Delete button -->
+                            <form method="post" class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onsubmit="return confirm('Remove this entry?');">
+                                <input type="hidden" name="action" value="delete_entry">
+                                <input type="hidden" name="id" value="<?= (int)$entry['id'] ?>">
+                                <input type="hidden" name="class_id_redirect" value="<?= $selectedClassId ?>">
+                                <button type="submit" class="w-5 h-5 flex items-center justify-center rounded bg-red-100 hover:bg-red-200 text-red-600"
+                                        title="Remove">
+                                    <i data-lucide="x" class="w-3 h-3"></i>
+                                </button>
+                            </form>
+                        </div>
+                        <?php else: ?>
+                        <!-- Empty slot — click to add -->
+                        <button onclick="openAddEntry(<?= $dayNum ?>, <?= $periodOrder ?>, <?= $selectedClassId ?>)"
+                                class="w-full h-full rounded-lg flex items-center justify-center text-slate-300 hover:bg-indigo-50 hover:text-indigo-400 transition-colors group"
+                                title="Add entry for <?= $dayName ?> P<?= $periodOrder ?>">
+                            <i data-lucide="plus-circle" class="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                        </button>
+                        <?php endif; ?>
+                    </td>
+                    <?php endforeach; ?>
+                </tr>
+                <?php endforeach; ?>
+                <?php if (empty($periods)): ?>
+                <tr>
+                    <td colspan="6" class="px-4 py-8 text-center text-slate-400 text-sm">
+                        No periods configured. Click <strong>Periods</strong> to set up period times.
+                    </td>
+                </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Legend -->
+    <?php if (!empty($entries)): ?>
+    <div class="border-t border-slate-100 px-4 py-3 flex flex-wrap gap-3">
+        <span class="text-xs font-semibold text-slate-400 uppercase mr-1">Subjects:</span>
+        <?php
+        $usedSubjects = [];
+        foreach ($entries as $e) {
+            $usedSubjects[$e['subject_id']] = $e['subject_name'];
+        }
+        foreach ($usedSubjects as $sid => $sname):
+            $color = $subjectColorMap[$sid] ?? '#6366f1';
+            $rgb = $hexToRgb($color);
+        ?>
+        <span class="inline-flex items-center gap-1.5 text-xs text-slate-600">
+            <span class="w-3 h-3 rounded-sm inline-block" style="background-color: <?= $color ?>"></span>
+            <?= htmlspecialchars($sname) ?>
+        </span>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+</div>
+
+<?php endif; ?>
+
+<!-- ===== Add Entry Modal ===== -->
+<div id="addEntryModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="document.getElementById('addEntryModal').classList.add('hidden')"></div>
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 z-10">
+        <div class="flex items-center justify-between mb-5">
+            <h3 class="text-base font-semibold text-slate-800">Add timetable entry</h3>
+            <button onclick="document.getElementById('addEntryModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        <form method="post" class="space-y-4">
+            <input type="hidden" name="action" value="save_entry">
+            <input type="hidden" name="class_id_redirect" value="<?= $selectedClassId ?>">
             <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Class</label>
-                <select name="class_id" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                    <option value="">—</option>
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Class</label>
+                <select name="class_id" id="modalClassId" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                    <option value="">— select —</option>
                     <?php foreach ($classes as $c): ?>
-                    <option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['name'] . ($c['section'] ? ' ' . $c['section'] : '')) ?></option>
+                    <option value="<?= (int)$c['id'] ?>" <?= $c['id'] == $selectedClassId ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($c['name'] . ($c['section'] ? ' ' . $c['section'] : '')) ?>
+                    </option>
                     <?php endforeach; ?>
                 </select>
             </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Day</label>
+                    <select name="day_of_week" id="modalDay" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                        <?php foreach ($days as $d => $label): ?>
+                        <option value="<?= $d ?>"><?= $label ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Period</label>
+                    <select name="period_order" id="modalPeriod" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                        <?php for ($i = 1; $i <= max(8, count($periods)); $i++): ?>
+                        <option value="<?= $i ?>"><?= $i ?></option>
+                        <?php endfor; ?>
+                    </select>
+                </div>
+            </div>
             <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Subject</label>
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Subject</label>
                 <select name="subject_id" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                    <option value="">—</option>
+                    <option value="">— select —</option>
                     <?php foreach ($subjects as $s): ?>
                     <option value="<?= (int)$s['id'] ?>"><?= htmlspecialchars($s['name']) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
             <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Teacher</label>
+                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Teacher</label>
                 <select name="teacher_id" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                    <option value="">—</option>
+                    <option value="">— select —</option>
                     <?php foreach ($teachers as $t): ?>
                     <option value="<?= (int)$t['id'] ?>"><?= htmlspecialchars($t['full_name']) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Day</label>
-                <select name="day_of_week" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                    <?php foreach ($days as $d => $label): ?>
-                    <option value="<?= $d ?>"><?= $label ?></option>
-                    <?php endforeach; ?>
-                </select>
+            <div class="flex gap-2 pt-1">
+                <button type="button" onclick="document.getElementById('addEntryModal').classList.add('hidden')"
+                        class="flex-1 px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50">
+                    Cancel
+                </button>
+                <button type="submit" class="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">
+                    Save entry
+                </button>
             </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Period</label>
-                <select name="period_order" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                    <?php for ($i = 1; $i <= max(8, count($periods)); $i++): ?>
-                    <option value="<?= $i ?>"><?= $i ?></option>
-                    <?php endfor; ?>
-                </select>
-            </div>
-            <div class="flex items-end">
-                <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">Add</button>
-            </div>
-        </div>
-    </form>
+        </form>
+    </div>
 </div>
 
-<!-- Entries table -->
-<div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
-    <div class="px-5 py-3.5 border-b border-slate-100 bg-slate-50">
-        <span class="text-sm font-semibold text-slate-800">Timetable entries</span>
-    </div>
-    <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-            <thead>
-                <tr class="border-b border-slate-100 bg-slate-50">
-                    <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase text-slate-400">Class</th>
-                    <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase text-slate-400">Subject</th>
-                    <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase text-slate-400">Teacher</th>
-                    <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase text-slate-400">Day</th>
-                    <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase text-slate-400">Period</th>
-                    <th class="text-right px-4 py-3 text-[11px] font-semibold uppercase text-slate-400">Actions</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <?php if (empty($entries)): ?>
-                <tr>
-                    <td colspan="6" class="px-4 py-8 text-center text-slate-400">No entries. Add one above.</td>
-                </tr>
-                <?php else: foreach ($entries as $e): ?>
-                <tr class="hover:bg-slate-50">
-                    <td class="px-4 py-3 font-medium text-slate-800"><?= htmlspecialchars($e['class_name'] . ($e['class_section'] ? ' ' . $e['class_section'] : '')) ?></td>
-                    <td class="px-4 py-3 text-slate-600"><?= htmlspecialchars($e['subject_name']) ?></td>
-                    <td class="px-4 py-3 text-slate-600"><?= htmlspecialchars($e['teacher_name']) ?></td>
-                    <td class="px-4 py-3 text-slate-500"><?= $days[$e['day_of_week']] ?? $e['day_of_week'] ?></td>
-                    <td class="px-4 py-3 text-slate-500"><?= (int)$e['period_order'] ?></td>
-                    <td class="px-4 py-3 text-right">
-                        <form method="post" class="inline" onsubmit="return confirm('Remove this entry?');">
-                            <input type="hidden" name="action" value="delete_entry">
-                            <input type="hidden" name="id" value="<?= (int)$e['id'] ?>">
-                            <button type="submit" class="text-red-500 hover:text-red-700 text-xs font-medium">Remove</button>
-                        </form>
-                    </td>
-                </tr>
-                <?php endforeach; endif; ?>
-            </tbody>
-        </table>
+<!-- ===== Periods Modal ===== -->
+<div id="periodsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="document.getElementById('periodsModal').classList.add('hidden')"></div>
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 z-10">
+        <div class="flex items-center justify-between mb-5">
+            <h3 class="text-base font-semibold text-slate-800">Configure periods</h3>
+            <button onclick="document.getElementById('periodsModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        <form method="post">
+            <input type="hidden" name="action" value="save_periods">
+            <input type="hidden" name="class_id_redirect" value="<?= $selectedClassId ?>">
+            <div class="space-y-3" id="periodsContainer">
+                <?php foreach ($periods as $i => $p): ?>
+                <div class="flex items-center gap-3">
+                    <span class="text-xs font-semibold text-slate-500 w-16 shrink-0">Period <?= (int)$p['period_order'] ?></span>
+                    <input type="hidden" name="periods[<?= $i ?>][order]" value="<?= (int)$p['period_order'] ?>">
+                    <input type="time" name="periods[<?= $i ?>][start]" value="<?= htmlspecialchars(substr($p['start_time'], 0, 5)) ?>"
+                           class="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                    <span class="text-slate-400">–</span>
+                    <input type="time" name="periods[<?= $i ?>][end]" value="<?= htmlspecialchars(substr($p['end_time'], 0, 5)) ?>"
+                           class="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <div class="flex gap-2 mt-5">
+                <button type="button" onclick="document.getElementById('periodsModal').classList.add('hidden')"
+                        class="flex-1 px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50">
+                    Cancel
+                </button>
+                <button type="submit" class="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">
+                    Save periods
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -305,3 +480,28 @@ foreach ($entries as $e) {
 
 <?php require __DIR__ . '/footer.php'; ?>
 <script>lucide.createIcons();</script>
+<script>
+function openAddEntry(day, period, classId) {
+    const modal = document.getElementById('addEntryModal');
+    modal.classList.remove('hidden');
+    const daySelect = document.getElementById('modalDay');
+    const periodSelect = document.getElementById('modalPeriod');
+    const classSelect = document.getElementById('modalClassId');
+    if (daySelect) daySelect.value = day;
+    if (periodSelect) periodSelect.value = period;
+    if (classSelect && classId) classSelect.value = classId;
+}
+
+// After form submit, preserve class filter via redirect
+(function() {
+    document.querySelectorAll('form[method=post]').forEach(form => {
+        form.addEventListener('submit', function() {
+            const classRedirect = form.querySelector('[name=class_id_redirect]');
+            if (classRedirect && classRedirect.value) {
+                const action = form.action || window.location.pathname;
+                form.action = '?class_id=' + classRedirect.value;
+            }
+        });
+    });
+})();
+</script>

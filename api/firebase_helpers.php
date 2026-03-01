@@ -106,6 +106,55 @@ function update_firebase_user_email(string $firebaseUid, string $newEmail): bool
 }
 
 /**
+ * Update a Firebase Auth user's password. Requires FIREBASE_SERVICE_ACCOUNT_PATH.
+ * Returns true on success, false on failure (or if not configured).
+ */
+function update_firebase_user_password(string $firebaseUid, string $newPassword): bool
+{
+    $projectId = getenv('FIREBASE_PROJECT_ID') ?: '';
+    $saPath    = getenv('FIREBASE_SERVICE_ACCOUNT_PATH') ?: '';
+
+    if (!$projectId || !$saPath || !file_exists($saPath)) {
+        return false;
+    }
+
+    $sa = json_decode(file_get_contents($saPath), true);
+    if (!is_array($sa) || empty($sa['private_key']) || empty($sa['client_email'])) {
+        return false;
+    }
+    $sa['private_key'] = str_replace('\\n', "\n", $sa['private_key']);
+
+    $accessToken = get_firebase_access_token($sa);
+    if (!$accessToken) {
+        return false;
+    }
+
+    $body = json_encode([
+        'localId'         => $firebaseUid,
+        'password'        => $newPassword,
+        'targetProjectId' => $projectId,
+    ]);
+
+    $url = 'https://identitytoolkit.googleapis.com/v1/accounts:update';
+    $ch  = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $body,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $accessToken,
+        ],
+    ]);
+
+    $resp = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    return $code >= 200 && $code < 300;
+}
+
+/**
  * Get OAuth2 access token from service account for Firebase/Identity Toolkit API.
  */
 function get_firebase_access_token(array $serviceAccount): ?string
