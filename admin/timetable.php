@@ -450,19 +450,27 @@ foreach ($subjects as $s) {
         <form method="post">
             <input type="hidden" name="action" value="save_periods">
             <input type="hidden" name="class_id_redirect" value="<?= $selectedClassId ?>">
-            <div class="space-y-3" id="periodsContainer">
+            <div class="space-y-2 max-h-72 overflow-y-auto pr-1" id="periodsContainer">
                 <?php foreach ($periods as $i => $p): ?>
-                <div class="flex items-center gap-3">
-                    <span class="text-xs font-semibold text-slate-500 w-16 shrink-0">Period <?= (int)$p['period_order'] ?></span>
-                    <input type="hidden" name="periods[<?= $i ?>][order]" value="<?= (int)$p['period_order'] ?>">
+                <div class="period-row flex items-center gap-2">
+                    <span class="text-xs font-semibold text-slate-400 w-6 text-right period-num"><?= (int)$p['period_order'] ?></span>
+                    <input type="hidden" class="period-order-input" name="periods[<?= $i ?>][order]" value="<?= (int)$p['period_order'] ?>">
                     <input type="time" name="periods[<?= $i ?>][start]" value="<?= htmlspecialchars(substr($p['start_time'], 0, 5)) ?>"
                            class="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                    <span class="text-slate-400">–</span>
+                    <span class="text-slate-400 shrink-0">–</span>
                     <input type="time" name="periods[<?= $i ?>][end]" value="<?= htmlspecialchars(substr($p['end_time'], 0, 5)) ?>"
                            class="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                    <button type="button" onclick="removePeriodRow(this)" class="text-slate-300 hover:text-red-500 transition-colors shrink-0" title="Remove">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
                 </div>
                 <?php endforeach; ?>
             </div>
+            <!-- Add period button -->
+            <button type="button" onclick="addPeriodRow()"
+                    class="mt-3 flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                <i data-lucide="plus-circle" class="w-4 h-4"></i> Add period
+            </button>
             <div class="flex gap-2 mt-5">
                 <button type="button" onclick="document.getElementById('periodsModal').classList.add('hidden')"
                         class="flex-1 px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50">
@@ -492,13 +500,68 @@ function openAddEntry(day, period, classId) {
     if (classSelect && classId) classSelect.value = classId;
 }
 
+// -------- Dynamic period rows --------
+function getPeriodCount() {
+    return document.querySelectorAll('#periodsContainer .period-row').length;
+}
+
+function renumberPeriods() {
+    document.querySelectorAll('#periodsContainer .period-row').forEach((row, idx) => {
+        const num = idx + 1;
+        const numLabel = row.querySelector('.period-num');
+        const orderInput = row.querySelector('.period-order-input');
+        const timeInputs = row.querySelectorAll('input[type=time]');
+        if (numLabel)   numLabel.textContent = num;
+        if (orderInput) { orderInput.name = `periods[${idx}][order]`; orderInput.value = num; }
+        if (timeInputs[0]) timeInputs[0].name = `periods[${idx}][start]`;
+        if (timeInputs[1]) timeInputs[1].name = `periods[${idx}][end]`;
+    });
+}
+
+function addPeriodRow() {
+    const container = document.getElementById('periodsContainer');
+    const count = getPeriodCount();
+    const newNum = count + 1;
+    const idx = count;
+
+    const row = document.createElement('div');
+    row.className = 'period-row flex items-center gap-2';
+    row.innerHTML = `
+        <span class="text-xs font-semibold text-slate-400 w-6 text-right period-num">${newNum}</span>
+        <input type="hidden" class="period-order-input" name="periods[${idx}][order]" value="${newNum}">
+        <input type="time" name="periods[${idx}][start]" required
+               class="flex-1 px-3 py-2 border border-indigo-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-indigo-50">
+        <span class="text-slate-400 shrink-0">–</span>
+        <input type="time" name="periods[${idx}][end]" required
+               class="flex-1 px-3 py-2 border border-indigo-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-indigo-50">
+        <button type="button" onclick="removePeriodRow(this)" class="text-slate-300 hover:text-red-500 transition-colors shrink-0" title="Remove">
+            <i data-lucide="x" class="w-4 h-4"></i>
+        </button>`;
+    container.appendChild(row);
+    lucide.createIcons();
+    // Focus first time input of new row
+    row.querySelector('input[type=time]')?.focus();
+}
+
+function removePeriodRow(btn) {
+    const row = btn.closest('.period-row');
+    const container = document.getElementById('periodsContainer');
+    if (container.querySelectorAll('.period-row').length <= 1) {
+        // Must keep at least one period — flash red briefly
+        row.style.outline = '2px solid #ef4444';
+        setTimeout(() => row.style.outline = '', 800);
+        return;
+    }
+    row.remove();
+    renumberPeriods();
+}
+
 // After form submit, preserve class filter via redirect
 (function() {
     document.querySelectorAll('form[method=post]').forEach(form => {
         form.addEventListener('submit', function() {
             const classRedirect = form.querySelector('[name=class_id_redirect]');
             if (classRedirect && classRedirect.value) {
-                const action = form.action || window.location.pathname;
                 form.action = '?class_id=' + classRedirect.value;
             }
         });
