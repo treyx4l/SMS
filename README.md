@@ -22,22 +22,6 @@ This project is structured for use with XAMPP on Windows. The MySQL database nam
 
 ### Environment Variables
 
-You will add a `.env` file later in the project root. This app expects at least:
-
-```env
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=axis_sms
-DB_USERNAME=root
-DB_PASSWORD=
-
-FIREBASE_PROJECT_ID=your_firebase_project_id
-FIREBASE_API_KEY=your_firebase_web_api_key
-FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-FIREBASE_SERVICE_ACCOUNT_PATH=storage/firebase-service-account.json
-```
-
-> Note: `FIREBASE_SERVICE_ACCOUNT_PATH` should be a path **outside** the web root in production. For local development you can keep it in a `storage` folder.
 
 ### Basic Setup
 
