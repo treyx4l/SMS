@@ -124,7 +124,7 @@ $params[] = $perPage;
 $params[] = $offset;
 $types .= 'ii';
 $stmt = $conn->prepare("
-    SELECT d.id, d.full_name, d.email, d.phone, d.address, d.created_at,
+    SELECT d.id, d.full_name, d.email, d.phone, d.address, d.photo_path, d.created_at,
            CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END AS has_login
     FROM bus_drivers d
     LEFT JOIN users u ON u.firebase_uid = CONCAT('local:driver:', d.id) AND u.school_id = d.school_id AND u.role = 'driver'
@@ -265,67 +265,66 @@ $total = $totalRows;
     </div>
 </div>
 
-<?php if ($edit): ?>
-<div class="bg-white border border-indigo-200 rounded-xl overflow-hidden">
-    <div class="flex items-center gap-2.5 px-5 py-3.5 border-b border-indigo-100 bg-indigo-50">
-        <i data-lucide="pencil" class="w-4 h-4 text-indigo-600"></i>
-        <span class="text-sm font-semibold text-indigo-800">Editing: <?= htmlspecialchars($edit['full_name']) ?></span>
-    </div>
-    <form method="post" enctype="multipart/form-data" class="p-5">
-        <input type="hidden" name="action" value="update">
-        <input type="hidden" name="id" value="<?= (int) $edit['id'] ?>">
-
-        <div class="flex items-center gap-6 mb-4">
-            <div class="w-20 h-20 rounded-xl border-2 border-slate-200 flex items-center justify-center bg-slate-50 overflow-hidden shrink-0">
-                <?php if (!empty($edit['photo_path']) && file_exists(dirname(__DIR__) . '/' . ($edit['photo_path'] ?? ''))): ?>
-                <img src="../<?= htmlspecialchars($edit['photo_path']) ?>" alt="" class="w-full h-full object-cover">
-                <?php else: ?>
-                <i data-lucide="user" class="w-10 h-10 text-slate-300"></i>
-                <?php endif; ?>
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Photo</label>
-                <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp"
-                       class="block w-full text-sm text-slate-500 file:mr-2 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-sm file:font-medium hover:file:bg-indigo-100">
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Full Name *</label>
-                <input type="text" name="full_name" required value="<?= htmlspecialchars($edit['full_name']) ?>"
-                       class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Email</label>
-                <input type="email" name="email" value="<?= htmlspecialchars($edit['email'] ?? '') ?>"
-                       class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Phone</label>
-                <input type="text" name="phone" value="<?= htmlspecialchars($edit['phone'] ?? '') ?>"
-                       class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
-            </div>
-            <div class="md:col-span-2">
-                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Address</label>
-                <input type="text" name="address" value="<?= htmlspecialchars($edit['address'] ?? '') ?>"
-                       class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
-            </div>
-        </div>
-
-        <div class="flex items-center gap-3">
-            <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors">
-                <i data-lucide="save" class="w-4 h-4"></i>
-                Save Changes
-            </button>
-            <a href="drivers.php" class="inline-flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors">
+<!-- Edit Driver Modal -->
+<div id="editDriverModal" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm overflow-y-auto py-8">
+    <div class="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg mx-4 my-auto">
+        <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+            <span class="text-sm font-semibold text-slate-800">Edit Driver</span>
+            <button type="button" onclick="closeEditDriverModal()" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
                 <i data-lucide="x" class="w-4 h-4"></i>
-                Cancel
-            </a>
+            </button>
         </div>
-    </form>
+        <form method="post" enctype="multipart/form-data" id="editDriverForm" class="p-5">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="id" id="editDriverId">
+
+            <div class="flex items-center gap-6 mb-4">
+                <div id="editDriverPhotoPreview" class="w-20 h-20 rounded-xl border-2 border-slate-200 flex items-center justify-center bg-slate-50 overflow-hidden shrink-0">
+                    <i data-lucide="user" class="w-10 h-10 text-slate-300"></i>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Photo</label>
+                    <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp"
+                           class="block w-full text-sm text-slate-500 file:mr-2 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-sm file:font-medium hover:file:bg-indigo-100">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Full Name *</label>
+                    <input type="text" name="full_name" id="editDriverName" required
+                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Email</label>
+                    <input type="email" name="email" id="editDriverEmail"
+                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Phone</label>
+                    <input type="text" name="phone" id="editDriverPhone"
+                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Address</label>
+                    <input type="text" name="address" id="editDriverAddress"
+                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <button type="button" onclick="closeEditDriverModal()" class="inline-flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                    Cancel
+                </button>
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors">
+                    <i data-lucide="save" class="w-4 h-4"></i>
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
 </div>
-<?php endif; ?>
 
 <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
     <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
@@ -366,8 +365,12 @@ $total = $totalRows;
                 <tr class="hover:bg-slate-50 transition-colors driver-row">
                     <td class="px-5 py-3.5">
                         <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">
-                                <?= strtoupper(substr($d['full_name'], 0, 1)) ?>
+                            <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0 overflow-hidden">
+                                <?php if (!empty($d['photo_path'] ?? '')): ?>
+                                    <img src="../<?= htmlspecialchars($d['photo_path']) ?>" alt="<?= htmlspecialchars($d['full_name']) ?>" class="w-full h-full object-cover">
+                                <?php else: ?>
+                                    <span><?= strtoupper(substr($d['full_name'], 0, 1)) ?></span>
+                                <?php endif; ?>
                             </div>
                             <div>
                                 <div class="font-medium text-slate-800 driver-name"><?= htmlspecialchars($d['full_name']) ?></div>
@@ -390,10 +393,18 @@ $total = $totalRows;
                     </td>
                     <td class="px-5 py-3.5 text-right">
                         <div class="flex items-center justify-end gap-2">
-                            <a href="drivers.php?edit_id=<?= (int) $d['id'] ?>"
+                            <button type="button"
+                               onclick='openEditDriverModal(<?= json_encode([
+                                   'id' => (int) $d['id'],
+                                   'full_name' => $d['full_name'],
+                                   'email' => $d['email'] ?? '',
+                                   'phone' => $d['phone'] ?? '',
+                                   'address' => $d['address'] ?? '',
+                                   'photo_path' => $d['photo_path'] ?? '',
+                               ]) ?>)'
                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
                                 <i data-lucide="pencil" class="w-3 h-3"></i> Edit
-                            </a>
+                            </button>
                             <form method="post" class="inline" onsubmit="return confirm('Remove <?= htmlspecialchars(addslashes($d['full_name'])) ?>? This will revoke their login access.')">
                                 <input type="hidden" name="action" value="delete">
                                 <input type="hidden" name="id" value="<?= (int) $d['id'] ?>">
@@ -436,9 +447,27 @@ $total = $totalRows;
 </div>
 
 <?php require_once __DIR__ . '/footer.php'; ?>
-<script>lucide.createIcons();</script>
 <script>
 // Search is server-side via form GET q=
+
+function openEditDriverModal(data) {
+    document.getElementById('editDriverId').value = data.id;
+    document.getElementById('editDriverName').value = data.full_name || '';
+    document.getElementById('editDriverEmail').value = data.email || '';
+    document.getElementById('editDriverPhone').value = data.phone || '';
+    document.getElementById('editDriverAddress').value = data.address || '';
+    const preview = document.getElementById('editDriverPhotoPreview');
+    if (data.photo_path && data.photo_path.trim() !== '') {
+        preview.innerHTML = '<img src="../' + (data.photo_path || '').replace(/"/g, '&quot;') + '" alt="" class="w-full h-full object-cover">';
+    } else {
+        preview.innerHTML = '<i data-lucide="user" class="w-10 h-10 text-slate-300"></i>';
+    }
+    document.getElementById('editDriverModal').classList.remove('hidden');
+    if (window.lucide) lucide.createIcons();
+}
+function closeEditDriverModal() {
+    document.getElementById('editDriverModal').classList.add('hidden');
+}
 
 async function createDriver() {
     const btn     = document.getElementById('add-driver-btn');

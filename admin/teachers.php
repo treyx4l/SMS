@@ -420,8 +420,13 @@ $stmt->close();
                 <tr class="hover:bg-slate-50 transition-colors teacher-row">
                     <td class="px-5 py-3.5">
                         <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">
-                                <?= strtoupper(substr($t['full_name'],0,1)) ?>
+                            <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0 overflow-hidden">
+                                <?php if (!empty($hasPhotoPath) && !empty($t['photo_path'] ?? '')): ?>
+                                    <img src="../<?= htmlspecialchars($t['photo_path']) ?>" alt="<?= htmlspecialchars($t['full_name']) ?>"
+                                         class="w-full h-full object-cover">
+                                <?php else: ?>
+                                    <span><?= strtoupper(substr($t['full_name'],0,1)) ?></span>
+                                <?php endif; ?>
                             </div>
                             <div>
                                 <div class="font-medium text-slate-800 teacher-name"><?= htmlspecialchars($t['full_name']) ?></div>

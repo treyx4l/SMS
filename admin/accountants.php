@@ -124,7 +124,7 @@ $params[] = $perPage;
 $params[] = $offset;
 $types .= 'ii';
 $stmt = $conn->prepare("
-    SELECT a.id, a.full_name, a.email, a.phone, a.address, a.created_at,
+    SELECT a.id, a.full_name, a.email, a.phone, a.address, a.photo_path, a.created_at,
            CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END AS has_login
     FROM accountants a
     LEFT JOIN users u ON u.firebase_uid = CONCAT('local:accountant:', a.id) AND u.school_id = a.school_id AND u.role = 'accountant'
@@ -137,16 +137,6 @@ $stmt->execute();
 $res = $stmt->get_result();
 while ($row = $res->fetch_assoc()) $accountants[] = $row;
 $stmt->close();
-
-$edit = null;
-if (isset($_GET['edit_id'])) {
-    $eid  = (int) $_GET['edit_id'];
-    $stmt = $conn->prepare("SELECT * FROM accountants WHERE id=? AND school_id=?");
-    $stmt->bind_param('ii', $eid, $schoolId);
-    $stmt->execute();
-    $edit = $stmt->get_result()->fetch_assoc() ?: null;
-    $stmt->close();
-}
 
 $total = $totalRows;
 $withLogin = 0;
@@ -264,67 +254,66 @@ $stmt->close();
     </div>
 </div>
 
-<?php if ($edit): ?>
-<div class="bg-white border border-indigo-200 rounded-xl overflow-hidden">
-    <div class="flex items-center gap-2.5 px-5 py-3.5 border-b border-indigo-100 bg-indigo-50">
-        <i data-lucide="pencil" class="w-4 h-4 text-indigo-600"></i>
-        <span class="text-sm font-semibold text-indigo-800">Editing: <?= htmlspecialchars($edit['full_name']) ?></span>
-    </div>
-    <form method="post" enctype="multipart/form-data" class="p-5">
-        <input type="hidden" name="action" value="update">
-        <input type="hidden" name="id" value="<?= (int) $edit['id'] ?>">
-
-        <div class="flex items-center gap-6 mb-4">
-            <div class="w-20 h-20 rounded-xl border-2 border-slate-200 flex items-center justify-center bg-slate-50 overflow-hidden shrink-0">
-                <?php if (!empty($edit['photo_path']) && file_exists(dirname(__DIR__) . '/' . ($edit['photo_path'] ?? ''))): ?>
-                <img src="../<?= htmlspecialchars($edit['photo_path']) ?>" alt="" class="w-full h-full object-cover">
-                <?php else: ?>
-                <i data-lucide="user" class="w-10 h-10 text-slate-300"></i>
-                <?php endif; ?>
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Photo</label>
-                <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp"
-                       class="block w-full text-sm text-slate-500 file:mr-2 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-sm file:font-medium hover:file:bg-indigo-100">
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Full Name *</label>
-                <input type="text" name="full_name" required value="<?= htmlspecialchars($edit['full_name']) ?>"
-                       class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Email</label>
-                <input type="email" name="email" value="<?= htmlspecialchars($edit['email'] ?? '') ?>"
-                       class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Phone</label>
-                <input type="text" name="phone" value="<?= htmlspecialchars($edit['phone'] ?? '') ?>"
-                       class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
-            </div>
-            <div class="md:col-span-2">
-                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Address</label>
-                <input type="text" name="address" value="<?= htmlspecialchars($edit['address'] ?? '') ?>"
-                       class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
-            </div>
-        </div>
-
-        <div class="flex items-center gap-3">
-            <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors">
-                <i data-lucide="save" class="w-4 h-4"></i>
-                Save Changes
-            </button>
-            <a href="accountants.php" class="inline-flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors">
+<!-- Edit Accountant Modal -->
+<div id="editAccountantModal" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm overflow-y-auto py-8">
+    <div class="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg mx-4 my-auto">
+        <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+            <span class="text-sm font-semibold text-slate-800">Edit Accountant</span>
+            <button type="button" onclick="closeEditAccountantModal()" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
                 <i data-lucide="x" class="w-4 h-4"></i>
-                Cancel
-            </a>
+            </button>
         </div>
-    </form>
+        <form method="post" enctype="multipart/form-data" id="editAccountantForm" class="p-5">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="id" id="editAccountantId">
+
+            <div class="flex items-center gap-6 mb-4">
+                <div id="editAccountantPhotoPreview" class="w-20 h-20 rounded-xl border-2 border-slate-200 flex items-center justify-center bg-slate-50 overflow-hidden shrink-0">
+                    <i data-lucide="user" class="w-10 h-10 text-slate-300"></i>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Photo</label>
+                    <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp"
+                           class="block w-full text-sm text-slate-500 file:mr-2 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-sm file:font-medium hover:file:bg-indigo-100">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Full Name *</label>
+                    <input type="text" name="full_name" id="editAccountantName" required
+                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Email</label>
+                    <input type="email" name="email" id="editAccountantEmail"
+                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Phone</label>
+                    <input type="text" name="phone" id="editAccountantPhone"
+                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Address</label>
+                    <input type="text" name="address" id="editAccountantAddress"
+                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <button type="button" onclick="closeEditAccountantModal()" class="inline-flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                    Cancel
+                </button>
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors">
+                    <i data-lucide="save" class="w-4 h-4"></i>
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
 </div>
-<?php endif; ?>
 
 <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
     <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
@@ -365,8 +354,12 @@ $stmt->close();
                 <tr class="hover:bg-slate-50 transition-colors accountant-row">
                     <td class="px-5 py-3.5">
                         <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">
-                                <?= strtoupper(substr($a['full_name'], 0, 1)) ?>
+                            <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0 overflow-hidden">
+                                <?php if (!empty($a['photo_path'] ?? '')): ?>
+                                    <img src="../<?= htmlspecialchars($a['photo_path']) ?>" alt="<?= htmlspecialchars($a['full_name']) ?>" class="w-full h-full object-cover">
+                                <?php else: ?>
+                                    <span><?= strtoupper(substr($a['full_name'], 0, 1)) ?></span>
+                                <?php endif; ?>
                             </div>
                             <div>
                                 <div class="font-medium text-slate-800 accountant-name"><?= htmlspecialchars($a['full_name']) ?></div>
@@ -389,10 +382,18 @@ $stmt->close();
                     </td>
                     <td class="px-5 py-3.5 text-right">
                         <div class="flex items-center justify-end gap-2">
-                            <a href="accountants.php?edit_id=<?= (int) $a['id'] ?>"
+                            <button type="button"
+                               onclick='openEditAccountantModal(<?= json_encode([
+                                   'id' => (int) $a['id'],
+                                   'full_name' => $a['full_name'],
+                                   'email' => $a['email'] ?? '',
+                                   'phone' => $a['phone'] ?? '',
+                                   'address' => $a['address'] ?? '',
+                                   'photo_path' => $a['photo_path'] ?? '',
+                               ]) ?>)'
                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
                                 <i data-lucide="pencil" class="w-3 h-3"></i> Edit
-                            </a>
+                            </button>
                             <form method="post" class="inline" onsubmit="return confirm('Remove <?= htmlspecialchars(addslashes($a['full_name'])) ?>? This will revoke their login access.')">
                                 <input type="hidden" name="action" value="delete">
                                 <input type="hidden" name="id" value="<?= (int) $a['id'] ?>">
@@ -435,9 +436,27 @@ $stmt->close();
 </div>
 
 <?php require_once __DIR__ . '/footer.php'; ?>
-<script>lucide.createIcons();</script>
 <script>
 // Search is server-side via form GET q=
+
+function openEditAccountantModal(data) {
+    document.getElementById('editAccountantId').value = data.id;
+    document.getElementById('editAccountantName').value = data.full_name || '';
+    document.getElementById('editAccountantEmail').value = data.email || '';
+    document.getElementById('editAccountantPhone').value = data.phone || '';
+    document.getElementById('editAccountantAddress').value = data.address || '';
+    const preview = document.getElementById('editAccountantPhotoPreview');
+    if (data.photo_path && data.photo_path.trim() !== '') {
+        preview.innerHTML = '<img src="../' + (data.photo_path || '').replace(/"/g, '&quot;') + '" alt="" class="w-full h-full object-cover">';
+    } else {
+        preview.innerHTML = '<i data-lucide="user" class="w-10 h-10 text-slate-300"></i>';
+    }
+    document.getElementById('editAccountantModal').classList.remove('hidden');
+    if (window.lucide) lucide.createIcons();
+}
+function closeEditAccountantModal() {
+    document.getElementById('editAccountantModal').classList.add('hidden');
+}
 
 async function createAccountant() {
     const btn     = document.getElementById('add-accountant-btn');
