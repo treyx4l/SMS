@@ -1,7 +1,144 @@
 <?php
 $page_title = 'Timetable';
 require_once __DIR__ . '/layout.php';
+
+$conn     = get_db_connection();
+$schoolId = current_school_id();
+
+// Resolve teacher_id from logged-in user
+$teacherId = null;
+$userId    = (int) ($_SESSION['user_id'] ?? 0);
+if ($userId && $schoolId) {
+    $stmt = $conn->prepare("
+        SELECT t.id
+        FROM teachers t
+        JOIN users u
+          ON u.email = t.email
+         AND u.school_id = t.school_id
+        WHERE u.id = ?
+          AND u.role = 'teacher'
+          AND u.school_id = ?
+        LIMIT 1
+    ");
+    if ($stmt) {
+        $stmt->bind_param('ii', $userId, $schoolId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if ($row) {
+            $teacherId = (int) $row['id'];
+        }
+    }
+}
+
+$hasTimetable = false;
+$res = $conn->query("SHOW TABLES LIKE 'timetable_entries'");
+if ($res && $res->num_rows > 0) {
+    $hasTimetable = true;
+}
+
+$periods     = [];
+$timetable   = []; // [period_order][day_of_week] => entry
+$todaySlots  = [];
+$classesById = [];
+$subjectsById = [];
+
+if ($teacherId && $schoolId && $hasTimetable) {
+    // Load periods for this school
+    $res = $conn->query("SHOW TABLES LIKE 'timetable_periods'");
+    if ($res && $res->num_rows > 0) {
+        $stmt = $conn->prepare("
+            SELECT period_order, start_time, end_time, label
+            FROM timetable_periods
+            WHERE school_id = ?
+            ORDER BY period_order
+        ");
+        if ($stmt) {
+            $stmt->bind_param('i', $schoolId);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            while ($row = $res->fetch_assoc()) {
+                $order = (int) $row['period_order'];
+                $periods[$order] = $row;
+            }
+            $stmt->close();
+        }
+    }
+
+    // Fallback if periods table not set up: create some generic periods
+    if (!$periods) {
+        for ($i = 1; $i <= 7; $i++) {
+            $periods[$i] = [
+                'period_order' => $i,
+                'start_time'   => null,
+                'end_time'     => null,
+                'label'        => 'Period ' . $i,
+            ];
+        }
+    }
+
+    // Load timetable entries for this teacher
+    $stmt = $conn->prepare("
+        SELECT e.class_id, e.subject_id, e.day_of_week, e.period_order,
+               c.name AS class_name, c.section AS class_section,
+               s.name AS subject_name
+        FROM timetable_entries e
+        LEFT JOIN classes c
+          ON c.id = e.class_id
+         AND c.school_id = e.school_id
+        LEFT JOIN subjects s
+          ON s.id = e.subject_id
+         AND s.school_id = e.school_id
+        WHERE e.school_id = ?
+          AND e.teacher_id = ?
+        ORDER BY e.day_of_week, e.period_order
+    ");
+    if ($stmt) {
+        $stmt->bind_param('ii', $schoolId, $teacherId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $day   = (int) $row['day_of_week'];   // 1 = Mon ... 5 = Fri
+            $order = (int) $row['period_order'];
+            if (!isset($timetable[$order])) {
+                $timetable[$order] = [];
+            }
+            $timetable[$order][$day] = $row;
+        }
+        $stmt->close();
+    }
+
+    // Today's schedule (based on current weekday)
+    $todayDow = (int) date('N'); // 1..7
+    if ($todayDow >= 1 && $todayDow <= 5) {
+        foreach ($timetable as $order => $rowByDay) {
+            if (isset($rowByDay[$todayDow])) {
+                $slot = $rowByDay[$todayDow];
+                $slot['period_order'] = $order;
+                $todaySlots[] = $slot;
+            }
+        }
+    }
+}
 ?>
+
+<?php if (!$teacherId): ?>
+<div class="bg-amber-50 border border-amber-200 rounded-xl p-6">
+    <p class="text-sm text-amber-800">Your account is not linked to a teacher record. Please contact the admin.</p>
+</div>
+<?php elseif (!$hasTimetable): ?>
+<div class="bg-amber-50 border border-amber-200 rounded-xl p-6">
+    <p class="text-sm text-amber-800">
+        The central timetable has not been set up yet. Once the admin creates timetable entries, you will see your weekly schedule here.
+    </p>
+</div>
+<?php elseif (empty($timetable)): ?>
+<div class="bg-amber-50 border border-amber-200 rounded-xl p-6">
+    <p class="text-sm text-amber-800">
+        There are currently no timetable entries linked to you. Please ask the admin to assign you to periods on the timetable.
+    </p>
+</div>
+<?php else: ?>
 
 <!-- Filters / selection -->
 <div class="bg-white rounded-xl border border-slate-200 p-5 mb-4">
@@ -9,69 +146,15 @@ require_once __DIR__ . '/layout.php';
         <div>
             <h2 class="text-sm font-semibold text-slate-800">View timetable</h2>
             <p class="text-[11px] text-slate-500">
-                See your teaching periods across the week, filtered to only the classes and subjects you handle.
+                Read-only view of your teaching periods across the week, as prepared by the admin.
             </p>
         </div>
-
-        <div class="flex flex-wrap gap-2">
-            <select class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">
-                <option>Session (placeholder)</option>
-                <option>2024 / 2025</option>
-                <option>2025 / 2026</option>
-            </select>
-            <select class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">
-                <option>Term</option>
-                <option>1st Term</option>
-                <option>2nd Term</option>
-                <option>3rd Term</option>
-            </select>
+        <div class="flex flex-wrap gap-2 text-[11px] text-slate-500">
+            <span class="inline-flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span>Your teaching slots</span>
+            </span>
         </div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <div>
-            <label class="block text-[11px] font-medium text-slate-600 mb-1">View</label>
-            <select class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">
-                <option>Weekly timetable</option>
-                <option>Today only</option>
-                <option>Specific day</option>
-            </select>
-        </div>
-
-        <div>
-            <label class="block text-[11px] font-medium text-slate-600 mb-1">Class filter (optional)</label>
-            <select class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">
-                <option>All classes I teach</option>
-                <option>JSS1 A</option>
-                <option>JSS2 B</option>
-                <option>SS1 C</option>
-            </select>
-        </div>
-
-        <div>
-            <label class="block text-[11px] font-medium text-slate-600 mb-1">Subject filter (optional)</label>
-            <select class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">
-                <option>All subjects I teach</option>
-                <option>Mathematics</option>
-                <option>English</option>
-                <option>Basic Science</option>
-                <option>ICT</option>
-            </select>
-        </div>
-
-        <div class="flex items-end justify-end gap-2">
-            <button class="inline-flex items-center justify-center px-3 py-1.5 rounded-lg border border-slate-200 text-[11px] text-slate-700 hover:border-slate-300 hover:bg-slate-50">
-                Print / export
-            </button>
-            <button class="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700">
-                Refresh view
-            </button>
-        </div>
-    </div>
-
-    <div class="mt-4 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
-        <span class="font-medium text-slate-600">Note:</span>
-        <span>This is a front-end skeleton – later, the grid below will be populated from the central school timetable.</span>
     </div>
 </div>
 
@@ -81,14 +164,14 @@ require_once __DIR__ . '/layout.php';
     <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
             <span class="text-xs font-semibold text-slate-800">Weekly timetable</span>
-            <span class="text-[11px] text-slate-400">Current lesson is highlighted when viewing live.</span>
+            <span class="text-[11px] text-slate-400">Generated from central timetable_entries; read-only.</span>
         </div>
 
         <div class="overflow-x-auto">
             <table class="min-w-full text-xs text-left text-slate-700">
                 <thead class="bg-slate-50 border-b border-slate-100">
                 <tr>
-                    <th class="px-3 py-2 font-semibold text-[11px] text-slate-500">Time</th>
+                    <th class="px-3 py-2 font-semibold text-[11px] text-slate-500">Time / Period</th>
                     <th class="px-3 py-2 font-semibold text-[11px] text-slate-500 text-center">Monday</th>
                     <th class="px-3 py-2 font-semibold text-[11px] text-slate-500 text-center">Tuesday</th>
                     <th class="px-3 py-2 font-semibold text-[11px] text-slate-500 text-center">Wednesday</th>
@@ -97,138 +180,88 @@ require_once __DIR__ . '/layout.php';
                 </tr>
                 </thead>
                 <tbody>
-                <!-- Row 1 -->
+                <?php
+                ksort($periods);
+                foreach ($periods as $order => $p):
+                    $label = $p['label'] ?: ('Period ' . $order);
+                    if (!empty($p['start_time']) && !empty($p['end_time'])) {
+                        $timeLabel = date('H:i', strtotime($p['start_time'])) . ' – ' . date('H:i', strtotime($p['end_time']));
+                    } else {
+                        $timeLabel = $label;
+                    }
+                ?>
                 <tr class="border-b border-slate-100">
-                    <td class="px-3 py-2 text-[11px] text-slate-500">08:00 – 08:40</td>
-                    <td class="px-3 py-2">
+                    <td class="px-3 py-2 text-[11px] text-slate-500">
+                        <div class="font-semibold text-slate-700"><?= htmlspecialchars($label) ?></div>
+                        <div class="text-[10px] text-slate-400"><?= htmlspecialchars($timeLabel) ?></div>
+                    </td>
+                    <?php for ($day = 1; $day <= 5; $day++): ?>
+                    <?php $entry = $timetable[$order][$day] ?? null; ?>
+                    <td class="px-3 py-2 align-top">
+                        <?php if ($entry): ?>
                         <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px]">
-                            <div class="font-semibold text-emerald-800">Mathematics</div>
-                            <div class="text-[10px] text-slate-500">JSS1 A • Rm 3</div>
+                            <div class="font-semibold text-emerald-800"><?= htmlspecialchars($entry['subject_name'] ?? 'Subject') ?></div>
+                            <div class="text-[10px] text-slate-500">
+                                <?= htmlspecialchars(($entry['class_name'] ?? 'Class') . (!empty($entry['class_section']) ? ' ' . $entry['class_section'] : '')) ?>
+                            </div>
                         </div>
+                        <?php endif; ?>
                     </td>
-                    <td class="px-3 py-2">
-                        <div class="rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-[10px]">
-                            <div class="font-semibold text-sky-800">English</div>
-                            <div class="text-[10px] text-slate-500">JSS2 B • Rm 5</div>
-                        </div>
-                    </td>
-                    <td class="px-3 py-2"></td>
-                    <td class="px-3 py-2">
-                        <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px]">
-                            <div class="font-semibold text-emerald-800">Mathematics</div>
-                            <div class="text-[10px] text-slate-500">JSS1 A • Rm 3</div>
-                        </div>
-                    </td>
-                    <td class="px-3 py-2"></td>
+                    <?php endfor; ?>
                 </tr>
-
-                <!-- Row 2 -->
-                <tr class="border-b border-slate-100">
-                    <td class="px-3 py-2 text-[11px] text-slate-500">08:40 – 09:20</td>
-                    <td class="px-3 py-2"></td>
-                    <td class="px-3 py-2">
-                        <div class="rounded-lg border border-violet-200 bg-violet-50 px-2 py-1 text-[10px]">
-                            <div class="font-semibold text-violet-800">Basic Science</div>
-                            <div class="text-[10px] text-slate-500">JSS1 B • Lab 1</div>
-                        </div>
-                    </td>
-                    <td class="px-3 py-2"></td>
-                    <td class="px-3 py-2">
-                        <div class="rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-[10px]">
-                            <div class="font-semibold text-sky-800">English</div>
-                            <div class="text-[10px] text-slate-500">JSS1 A • Rm 2</div>
-                        </div>
-                    </td>
-                    <td class="px-3 py-2"></td>
-                </tr>
-
-                <!-- Row 3 -->
-                <tr class="border-b border-slate-100">
-                    <td class="px-3 py-2 text-[11px] text-slate-500">09:20 – 10:00</td>
-                    <td class="px-3 py-2"></td>
-                    <td class="px-3 py-2"></td>
-                    <td class="px-3 py-2">
-                        <div class="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[10px]">
-                            <div class="font-semibold text-amber-800">ICT</div>
-                            <div class="text-[10px] text-slate-500">SS1 C • Lab 2</div>
-                        </div>
-                    </td>
-                    <td class="px-3 py-2"></td>
-                    <td class="px-3 py-2">
-                        <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px]">
-                            <div class="font-semibold text-emerald-800">Mathematics</div>
-                            <div class="text-[10px] text-slate-500">JSS2 B • Rm 4</div>
-                        </div>
-                    </td>
-                </tr>
-
-                <!-- Break row -->
-                <tr class="bg-slate-50 border-y border-slate-100">
-                    <td class="px-3 py-2 text-[11px] text-slate-500">10:00 – 10:20</td>
-                    <td colspan="5" class="px-3 py-2 text-[11px] text-slate-500">
-                        Short break
-                    </td>
-                </tr>
-
-                <!-- Additional rows would be generated from the timetable later -->
+                <?php endforeach; ?>
                 </tbody>
             </table>
-        </div>
-
-        <div class="px-4 py-3 border-t border-slate-100 flex items-center justify-between">
-            <span class="text-[11px] text-slate-500">Entries are examples only – they will be replaced with your real timetable.</span>
-            <button class="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800">
-                Open printable view
-            </button>
         </div>
     </div>
 
     <!-- Sidebar: today + legend -->
     <div class="space-y-4">
         <div class="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 class="text-xs font-semibold text-slate-800 mb-2">Today’s schedule (sample)</h3>
-            <p class="text-[11px] text-slate-500 mb-3">
-                At a glance view of your periods for the selected day.
+            <h3 class="text-xs font-semibold text-slate-800 mb-2">Today’s schedule</h3>
+            <?php if (!$todaySlots): ?>
+            <p class="text-[11px] text-slate-500">
+                You have no periods on the timetable for today.
             </p>
+            <?php else: ?>
             <div class="space-y-2 text-[11px]">
+                <?php foreach ($todaySlots as $slot): ?>
+                <?php
+                    $order = (int) $slot['period_order'];
+                    $p     = $periods[$order] ?? null;
+                    $timeLabel = $p && !empty($p['start_time']) && !empty($p['end_time'])
+                        ? date('H:i', strtotime($p['start_time'])) . ' – ' . date('H:i', strtotime($p['end_time']))
+                        : ('Period ' . $order);
+                ?>
                 <div class="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
                     <div>
-                        <div class="font-semibold text-slate-800">08:00 – 08:40</div>
-                        <div class="text-[10px] text-slate-500">Mathematics • JSS1 A • Rm 3</div>
+                        <div class="font-semibold text-slate-800"><?= htmlspecialchars($timeLabel) ?></div>
+                        <div class="text-[10px] text-slate-500">
+                            <?= htmlspecialchars($slot['subject_name'] ?? 'Subject') ?>
+                            &middot;
+                            <?= htmlspecialchars(($slot['class_name'] ?? 'Class') . (!empty($slot['class_section']) ? ' ' . $slot['class_section'] : '')) ?>
+                        </div>
                     </div>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px]">
-                        Upcoming
-                    </span>
                 </div>
-                <div class="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
-                    <div>
-                        <div class="font-semibold text-slate-800">08:40 – 09:20</div>
-                        <div class="text-[10px] text-slate-500">English • JSS2 B • Rm 5</div>
-                    </div>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px]">
-                        Later
-                    </span>
-                </div>
+                <?php endforeach; ?>
             </div>
+            <?php endif; ?>
         </div>
 
         <div class="bg-white rounded-xl border border-slate-200 p-4">
-            <h3 class="text-xs font-semibold text-slate-800 mb-2">Legend &amp; tips</h3>
+            <h3 class="text-xs font-semibold text-slate-800 mb-2">Legend &amp; notes</h3>
             <p class="text-[11px] text-slate-500 mb-2">
-                Colours and labels used in the timetable grid.
+                This timetable is read-only for teachers. The admin controls the class, subject and teacher assigned to each period.
             </p>
-            <ul class="text-[11px] text-slate-500 space-y-1 mb-3">
-                <li><span class="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1"></span><span class="font-semibold text-slate-700">Core subjects</span> (e.g. Mathematics, English).</li>
-                <li><span class="inline-block w-2 h-2 rounded-full bg-sky-500 mr-1"></span><span class="font-semibold text-slate-700">Language / reading periods</span>.</li>
-                <li><span class="inline-block w-2 h-2 rounded-full bg-violet-500 mr-1"></span><span class="font-semibold text-slate-700">Science / lab periods</span>.</li>
-                <li><span class="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1"></span><span class="font-semibold text-slate-700">Practical / ICT periods</span>.</li>
+            <ul class="text-[11px] text-slate-500 space-y-1 mb-2">
+                <li><span class="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1"></span>Your teaching slots.</li>
+                <li>Use this view alongside your attendance and grading pages to stay on top of each period.</li>
             </ul>
-            <p class="text-[11px] text-slate-400">
-                Later, we can add conflict warnings (overlapping periods) and quick links into attendance and grading for each slot.
-            </p>
         </div>
     </div>
 </div>
+
+<?php endif; ?>
 
 <?php require __DIR__ . '/footer.php'; ?>
 

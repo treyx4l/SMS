@@ -1,6 +1,291 @@
 <?php
 $page_title = 'Dashboard';
 require_once __DIR__ . '/layout.php';
+
+$conn     = get_db_connection();
+$schoolId = current_school_id();
+
+// Resolve teacher_id from logged-in user
+$teacherId = null;
+$userId    = (int) ($_SESSION['user_id'] ?? 0);
+if ($userId && $schoolId) {
+    $stmt = $conn->prepare("
+        SELECT t.id
+        FROM teachers t
+        JOIN users u
+          ON u.email = t.email
+         AND u.school_id = t.school_id
+        WHERE u.id = ?
+          AND u.role = 'teacher'
+          AND u.school_id = ?
+        LIMIT 1
+    ");
+    if ($stmt) {
+        $stmt->bind_param('ii', $userId, $schoolId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if ($row) {
+            $teacherId = (int) $row['id'];
+        }
+    }
+}
+
+$classesAssigned    = 0;
+$lessonsToday       = 0;
+$attendanceMarked   = 0;
+$gradingPending     = 0;
+$subjectsSummary    = [];
+$todaySchedule      = [];
+
+if ($teacherId && $schoolId) {
+    // Determine classes & subjects from timetable_entries + teacher_class_subjects
+    $classIds   = [];
+    $subjectIds = [];
+
+    // From timetable_entries (primary source)
+    $res = $conn->query("SHOW TABLES LIKE 'timetable_entries'");
+    if ($res && $res->num_rows > 0) {
+        $stmt = $conn->prepare("
+            SELECT DISTINCT class_id, subject_id
+            FROM timetable_entries
+            WHERE school_id = ? AND teacher_id = ?
+        ");
+        if ($stmt) {
+            $stmt->bind_param('ii', $schoolId, $teacherId);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            while ($row = $res->fetch_assoc()) {
+                $cid = (int) $row['class_id'];
+                $sid = (int) $row['subject_id'];
+                if ($cid > 0 && !in_array($cid, $classIds, true)) $classIds[] = $cid;
+                if ($sid > 0 && !in_array($sid, $subjectIds, true)) $subjectIds[] = $sid;
+            }
+            $stmt->close();
+        }
+    }
+
+    // Complement from teacher_class_subjects when available
+    $hasTcs = (bool) ($conn->query("SHOW TABLES LIKE 'teacher_class_subjects'")->num_rows ?? 0);
+    if ($hasTcs) {
+        $stmt = $conn->prepare("
+            SELECT class_id, subject_id
+            FROM teacher_class_subjects
+            WHERE school_id = ? AND teacher_id = ?
+        ");
+        if ($stmt) {
+            $stmt->bind_param('ii', $schoolId, $teacherId);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            while ($row = $res->fetch_assoc()) {
+                $cid = (int) $row['class_id'];
+                $sid = (int) $row['subject_id'];
+                if ($cid > 0 && !in_array($cid, $classIds, true)) $classIds[] = $cid;
+                if ($sid > 0 && !in_array($sid, $subjectIds, true)) $subjectIds[] = $sid;
+            }
+            $stmt->close();
+        }
+    }
+
+    $classesAssigned = count($classIds);
+
+    // Lessons today from timetable_entries
+    $res = $conn->query("SHOW TABLES LIKE 'timetable_entries'");
+    if ($res && $res->num_rows > 0) {
+        $todayDow = (int) date('N'); // 1..7
+        if ($todayDow >= 1 && $todayDow <= 5) {
+            $stmt = $conn->prepare("
+                SELECT e.class_id, e.subject_id, e.day_of_week, e.period_order,
+                       c.name AS class_name, c.section AS class_section,
+                       s.name AS subject_name
+                FROM timetable_entries e
+                LEFT JOIN classes c
+                  ON c.id = e.class_id
+                 AND c.school_id = e.school_id
+                LEFT JOIN subjects s
+                  ON s.id = e.subject_id
+                 AND s.school_id = e.school_id
+                WHERE e.school_id = ?
+                  AND e.teacher_id = ?
+                  AND e.day_of_week = ?
+                ORDER BY e.period_order
+            ");
+            if ($stmt) {
+                $stmt->bind_param('iii', $schoolId, $teacherId, $todayDow);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                while ($row = $res->fetch_assoc()) {
+                    $todaySchedule[] = $row;
+                }
+                $stmt->close();
+            }
+        }
+        $lessonsToday = count($todaySchedule);
+    }
+
+    // Attendance marked today (per class) from attendance table
+    $res = $conn->query("SHOW TABLES LIKE 'attendance'");
+    if ($res && $res->num_rows > 0 && $classIds) {
+        $today = date('Y-m-d');
+        $placeholders = implode(',', array_fill(0, count($classIds), '?'));
+        $types = 'i' . str_repeat('i', count($classIds));
+        $sql = "
+            SELECT COUNT(DISTINCT class_id) AS c
+            FROM attendance
+            WHERE school_id = ?
+              AND date = ?
+              AND class_id IN ($placeholders)
+        ";
+        $stmt = $conn->prepare($sql);
+        if ($stmt) {
+            $params = array_merge([$schoolId, $today], $classIds);
+            $stmt->bind_param($types, ...$params);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            $attendanceMarked = (int) ($row['c'] ?? 0);
+        }
+    }
+
+    // Grading pending: approximate as students in your classes minus students who have at least one grade
+    $totalStudentsTaught = 0;
+    if ($classIds) {
+        $placeholders = implode(',', array_fill(0, count($classIds), '?'));
+        $types = 'i' . str_repeat('i', count($classIds));
+        $sql = "
+            SELECT COUNT(*) AS c
+            FROM students
+            WHERE school_id = ?
+              AND class_id IN ($placeholders)
+        ";
+        $stmt = $conn->prepare($sql);
+        if ($stmt) {
+            $params = array_merge([$schoolId], $classIds);
+            $stmt->bind_param($types, ...$params);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            $totalStudentsTaught = (int) ($row['c'] ?? 0);
+        }
+    }
+
+    $studentsWithGrades = 0;
+    $res = $conn->query("SHOW TABLES LIKE 'grades'");
+    if ($res && $res->num_rows > 0 && $classIds && $subjectIds) {
+        $classPh   = implode(',', array_fill(0, count($classIds), '?'));
+        $subjectPh = implode(',', array_fill(0, count($subjectIds), '?'));
+        $types = 'i' . str_repeat('i', count($classIds)) . str_repeat('i', count($subjectIds));
+        $sql = "
+            SELECT COUNT(DISTINCT student_id) AS c
+            FROM grades
+            WHERE school_id = ?
+              AND class_id IN ($classPh)
+              AND subject_id IN ($subjectPh)
+        ";
+        $stmt = $conn->prepare($sql);
+        if ($stmt) {
+            $params = array_merge([$schoolId], $classIds, $subjectIds);
+            $stmt->bind_param($types, ...$params);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            $studentsWithGrades = (int) ($row['c'] ?? 0);
+        }
+    }
+    $gradingPending = max(0, $totalStudentsTaught - $studentsWithGrades);
+
+    // Subjects quick summary: subject name + classes
+    if ($subjectIds) {
+        foreach ($subjectIds as $sid) {
+            $stmt = $conn->prepare("
+                SELECT id, name
+                FROM subjects
+                WHERE id = ? AND school_id = ?
+            ");
+            if ($stmt) {
+                $stmt->bind_param('ii', $sid, $schoolId);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if ($row) {
+                    $subjectsSummary[$sid] = [
+                        'id'      => (int) $row['id'],
+                        'name'    => $row['name'],
+                        'classes' => [],
+                    ];
+                }
+            }
+        }
+
+        // Which classes for each subject
+        $res = $conn->query("SHOW TABLES LIKE 'timetable_entries'");
+        if ($res && $res->num_rows > 0) {
+            $subjectPh = implode(',', array_fill(0, count($subjectIds), '?'));
+            $types = 'ii' . str_repeat('i', count($subjectIds));
+            $params = array_merge([$schoolId, $teacherId], $subjectIds);
+            $sql = "
+                SELECT DISTINCT subject_id, class_id
+                FROM timetable_entries
+                WHERE school_id = ?
+                  AND teacher_id = ?
+                  AND subject_id IN ($subjectPh)
+            ";
+            $stmt = $conn->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param($types, ...$params);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                while ($row = $res->fetch_assoc()) {
+                    $sid = (int) $row['subject_id'];
+                    $cid = (int) $row['class_id'];
+                    if (!isset($subjectsSummary[$sid])) continue;
+                    if (!in_array($cid, $subjectsSummary[$sid]['classes'], true)) {
+                        $subjectsSummary[$sid]['classes'][] = $cid;
+                    }
+                }
+                $stmt->close();
+            }
+        }
+
+        // Load class names for summary
+        if ($subjectsSummary) {
+            $allClassIds = [];
+            foreach ($subjectsSummary as $s) {
+                $allClassIds = array_merge($allClassIds, $s['classes']);
+            }
+            $allClassIds = array_unique($allClassIds);
+            $classesById = [];
+            foreach ($allClassIds as $cid) {
+                $stmt = $conn->prepare("
+                    SELECT id, name, section
+                    FROM classes
+                    WHERE id = ? AND school_id = ?
+                ");
+                if ($stmt) {
+                    $stmt->bind_param('ii', $cid, $schoolId);
+                    $stmt->execute();
+                    $row = $stmt->get_result()->fetch_assoc();
+                    $stmt->close();
+                    if ($row) {
+                        $classesById[$cid] = $row;
+                    }
+                }
+            }
+            // Replace class ids with labels
+            foreach ($subjectsSummary as $sid => &$s) {
+                $labels = [];
+                foreach ($s['classes'] as $cid) {
+                    if (!isset($classesById[$cid])) continue;
+                    $row = $classesById[$cid];
+                    $labels[] = $row['name'] . ($row['section'] ? ' ' . $row['section'] : '');
+                }
+                sort($labels, SORT_NATURAL | SORT_FLAG_CASE);
+                $s['classes'] = $labels;
+            }
+            unset($s);
+        }
+    }
+}
 ?>
 
 <!-- Top: Today at a glance -->
@@ -10,28 +295,32 @@ require_once __DIR__ . '/layout.php';
             <i data-lucide="bar-chart-2" class="w-4 h-4 text-emerald-600"></i>
             <span class="text-sm font-semibold text-slate-800">Today at a glance</span>
         </div>
-        <span class="text-[11px] text-slate-400">All numbers below are sample placeholders</span>
+        <span class="text-[11px] text-slate-400">
+            Data shown is scoped to your assigned classes and subjects.
+        </span>
     </div>
     <div class="grid grid-cols-2 md:grid-cols-4 divide-x divide-slate-100">
         <div class="px-5 py-4">
             <div class="text-xs text-slate-500 mb-1.5">Classes assigned</div>
-            <div class="text-2xl md:text-3xl font-bold text-emerald-600 mb-0.5">3</div>
+            <div class="text-2xl md:text-3xl font-bold text-emerald-600 mb-0.5"><?= $classesAssigned ?></div>
             <div class="text-[11px] text-slate-400">Total homeroom + subject classes</div>
         </div>
         <div class="px-5 py-4">
             <div class="text-xs text-slate-500 mb-1.5">Lessons today</div>
-            <div class="text-2xl md:text-3xl font-bold text-indigo-600 mb-0.5">5</div>
+            <div class="text-2xl md:text-3xl font-bold text-indigo-600 mb-0.5"><?= $lessonsToday ?></div>
             <div class="text-[11px] text-slate-400">Periods on today’s timetable</div>
         </div>
         <div class="px-5 py-4">
             <div class="text-xs text-slate-500 mb-1.5">Attendance marked</div>
-            <div class="text-2xl md:text-3xl font-bold text-amber-500 mb-0.5">2/5</div>
-            <div class="text-[11px] text-slate-400">Classes with completed attendance</div>
+            <div class="text-2xl md:text-3xl font-bold text-amber-500 mb-0.5">
+                <?= $lessonsToday > 0 ? $attendanceMarked . '/' . $lessonsToday : $attendanceMarked ?>
+            </div>
+            <div class="text-[11px] text-slate-400">Classes with completed attendance today</div>
         </div>
         <div class="px-5 py-4">
-            <div class="text-xs text-slate-500 mb-1.5">Grading pending</div>
-            <div class="text-2xl md:text-3xl font-bold text-rose-500 mb-0.5">7</div>
-            <div class="text-[11px] text-slate-400">Assignments / tests to record</div>
+            <div class="text-xs text-slate-500 mb-1.5">Students without grades yet</div>
+            <div class="text-2xl md:text-3xl font-bold text-rose-500 mb-0.5"><?= $gradingPending ?></div>
+            <div class="text-[11px] text-slate-400">Across your assigned classes/subjects</div>
         </div>
     </div>
 </div>
@@ -109,100 +398,49 @@ require_once __DIR__ . '/layout.php';
             </div>
         </div>
 
-        <!-- Open items (sample only) -->
+        <!-- Open items (overview text, data-backed hint) -->
         <div class="bg-white border border-slate-200 rounded-xl p-5">
             <div class="flex items-center justify-between mb-3">
-                <h2 class="text-sm font-semibold text-slate-800">Open items (sample)</h2>
-                <span class="text-[11px] text-slate-400">Later, this will be loaded from real data</span>
+                <h2 class="text-sm font-semibold text-slate-800">Open items (overview)</h2>
+                <span class="text-[11px] text-slate-400">Based on your classes and timetable</span>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px]">
-                <div>
-                    <h3 class="text-[11px] font-semibold text-slate-700 mb-2">Attendance to complete</h3>
-                    <ul class="space-y-1.5">
-                        <li class="flex items-center justify-between px-3 py-1.5 rounded-lg border border-slate-100">
-                            <div>
-                                <div class="font-medium text-slate-700">JSS1 A &mdash; Mathematics</div>
-                                <div class="text-[10px] text-slate-400">Today &middot; 1st period</div>
-                            </div>
-                            <a href="attendance.php" class="text-[10px] text-emerald-600 hover:text-emerald-700 font-semibold">
-                                MARK
-                            </a>
-                        </li>
-                        <li class="flex items-center justify-between px-3 py-1.5 rounded-lg border border-slate-100">
-                            <div>
-                                <div class="font-medium text-slate-700">JSS2 B &mdash; English</div>
-                                <div class="text-[10px] text-slate-400">Yesterday &middot; Missing</div>
-                            </div>
-                            <a href="attendance.php" class="text-[10px] text-emerald-600 hover:text-emerald-700 font-semibold">
-                                CATCH UP
-                            </a>
-                        </li>
-                    </ul>
-                </div>
-                <div>
-                    <h3 class="text-[11px] font-semibold text-slate-700 mb-2">Grading / notes</h3>
-                    <ul class="space-y-1.5">
-                        <li class="flex items-center justify-between px-3 py-1.5 rounded-lg border border-slate-100">
-                            <div>
-                                <div class="font-medium text-slate-700">Assignment &mdash; Fractions</div>
-                                <div class="text-[10px] text-slate-400">JSS1 A &middot; 24 scripts pending</div>
-                            </div>
-                            <a href="grades.php" class="text-[10px] text-violet-600 hover:text-violet-700 font-semibold">
-                                GRADE
-                            </a>
-                        </li>
-                        <li class="flex items-center justify-between px-3 py-1.5 rounded-lg border border-slate-100">
-                            <div>
-                                <div class="font-medium text-slate-700">Lesson note &mdash; Integers</div>
-                                <div class="text-[10px] text-slate-400">JSS1 A &middot; Draft not submitted</div>
-                            </div>
-                            <a href="lesson_notes.php" class="text-[10px] text-amber-600 hover:text-amber-700 font-semibold">
-                                UPDATE
-                            </a>
-                        </li>
-                    </ul>
-                </div>
-            </div>
+            <p class="text-[11px] text-slate-500">
+                You currently have <strong><?= $gradingPending ?></strong> student<?= $gradingPending === 1 ? '' : 's' ?> across your classes
+                without any recorded grade yet. Use the grading workspace to capture scores for recent tests and exams.
+            </p>
         </div>
     </div>
 
     <!-- Right column: timetable, subjects, reports -->
     <div class="space-y-4">
-        <!-- Today’s timetable sample -->
+        <!-- Today’s timetable -->
         <div class="bg-white border border-slate-200 rounded-xl p-5">
             <div class="flex items-center justify-between mb-3">
-                <h2 class="text-sm font-semibold text-slate-800">Today&rsquo;s timetable (sample)</h2>
+                <h2 class="text-sm font-semibold text-slate-800">Today&rsquo;s timetable</h2>
                 <a href="timetable.php" class="text-[11px] text-emerald-600 hover:text-emerald-700 font-medium">View full</a>
             </div>
+            <?php if (empty($todaySchedule)): ?>
+            <p class="text-[11px] text-slate-500">
+                You have no scheduled periods on the timetable for today.
+            </p>
+            <?php else: ?>
             <div class="space-y-2 text-[11px]">
+                <?php foreach ($todaySchedule as $slot): ?>
                 <div class="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
                     <div>
-                        <div class="font-semibold text-slate-800">08:00 – 08:40</div>
-                        <div class="text-[10px] text-slate-500">Mathematics &middot; JSS1 A &middot; Rm 3</div>
+                        <div class="font-semibold text-slate-800">
+                            Period <?= (int) $slot['period_order'] ?>
+                        </div>
+                        <div class="text-[10px] text-slate-500">
+                            <?= htmlspecialchars($slot['subject_name'] ?? 'Subject') ?>
+                            &middot;
+                            <?= htmlspecialchars(($slot['class_name'] ?? 'Class') . (!empty($slot['class_section']) ? ' ' . $slot['class_section'] : '')) ?>
+                        </div>
                     </div>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px]">
-                        Current
-                    </span>
                 </div>
-                <div class="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
-                    <div>
-                        <div class="font-semibold text-slate-800">08:40 – 09:20</div>
-                        <div class="text-[10px] text-slate-500">English &middot; JSS2 B &middot; Rm 5</div>
-                    </div>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px]">
-                        Next
-                    </span>
-                </div>
-                <div class="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
-                    <div>
-                        <div class="font-semibold text-slate-800">10:20 – 11:00</div>
-                        <div class="text-[10px] text-slate-500">ICT &middot; SS1 C &middot; Lab 2</div>
-                    </div>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-100 text-[10px]">
-                        Later
-                    </span>
-                </div>
+                <?php endforeach; ?>
             </div>
+            <?php endif; ?>
         </div>
 
         <!-- Subjects quick summary -->
@@ -211,38 +449,28 @@ require_once __DIR__ . '/layout.php';
                 <h2 class="text-sm font-semibold text-slate-800">Subjects you teach</h2>
                 <a href="subjects.php" class="text-[11px] text-emerald-600 hover:text-emerald-700 font-medium">View all</a>
             </div>
+            <?php if (empty($subjectsSummary)): ?>
+            <p class="text-[11px] text-slate-500">
+                No subjects have been linked to your account yet.
+            </p>
+            <?php else: ?>
             <div class="space-y-1.5 text-[11px]">
+                <?php foreach ($subjectsSummary as $s): ?>
                 <div class="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-1.5">
                     <div>
-                        <div class="font-medium text-slate-800">Mathematics</div>
-                        <div class="text-[10px] text-slate-500">JSS1 A &middot; Core</div>
+                        <div class="font-medium text-slate-800"><?= htmlspecialchars($s['name']) ?></div>
+                        <div class="text-[10px] text-slate-500">
+                            <?= $s['classes'] ? htmlspecialchars(implode(', ', $s['classes'])) : 'Class assignments via timetable' ?>
+                        </div>
                     </div>
                     <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px]">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                        Core
+                        Subject
                     </span>
                 </div>
-                <div class="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-1.5">
-                    <div>
-                        <div class="font-medium text-slate-800">English</div>
-                        <div class="text-[10px] text-slate-500">JSS2 B &middot; Core</div>
-                    </div>
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px]">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                        Core
-                    </span>
-                </div>
-                <div class="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-1.5">
-                    <div>
-                        <div class="font-medium text-slate-800">ICT</div>
-                        <div class="text-[10px] text-slate-500">SS1 C &middot; Elective</div>
-                    </div>
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 text-[10px]">
-                        <span class="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
-                        Elective
-                    </span>
-                </div>
+                <?php endforeach; ?>
             </div>
+            <?php endif; ?>
         </div>
 
         <!-- Reports & analytics overview -->
@@ -254,24 +482,9 @@ require_once __DIR__ . '/layout.php';
                     <a href="analytics.php" class="text-[11px] text-slate-500 hover:text-slate-700">View analytics</a>
                 </div>
             </div>
-            <p class="text-[11px] text-slate-500 mb-3">
-                This section will later hold charts for attendance trends, performance by class/subject, and at‑risk students,
-                scoped only to the classes and subjects assigned to you.
+            <p class="text-[11px] text-slate-500 mb-1">
+                Use reports and analytics to review attendance and performance trends for your assigned classes only.
             </p>
-            <div class="grid grid-cols-3 gap-2 text-center text-[11px]">
-                <div class="border border-slate-100 rounded-lg px-2 py-2">
-                    <div class="text-[10px] text-slate-500 mb-1">Attendance (sample)</div>
-                    <div class="text-lg font-bold text-emerald-600">92%</div>
-                </div>
-                <div class="border border-slate-100 rounded-lg px-2 py-2">
-                    <div class="text-[10px] text-slate-500 mb-1">Pass rate (sample)</div>
-                    <div class="text-lg font-bold text-sky-600">78%</div>
-                </div>
-                <div class="border border-slate-100 rounded-lg px-2 py-2">
-                    <div class="text-[10px] text-slate-500 mb-1">At‑risk students</div>
-                    <div class="text-lg font-bold text-rose-500">5</div>
-                </div>
-            </div>
         </div>
     </div>
 </div>
