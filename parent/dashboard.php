@@ -263,7 +263,7 @@ $totalWards = count($wards);
         <div class="flex border-b border-slate-100 text-xs font-medium">
             <button type="button"
                     data-tab-target="wards"
-                    class="px-4 py-2 -mb-px border-b-2 border-indigo-600 text-indigo-700">
+                    class="px-4 py-2 -mb-px border-b-2 border-red-500 text-red-600">
                 Wards
             </button>
             <button type="button"
@@ -343,7 +343,7 @@ $totalWards = count($wards);
                                 </div>
                                 <div class="flex justify-between">
                                     <dt class="text-slate-400">Address</dt>
-                                    <dd class="font-medium text-slate-700 text-right max-w-[60%]">
+                                    <dd class="font-medium text-slate-700 text-right max-w-[70%] break-words">
                                         <?= htmlspecialchars($w['address'] ?? '—') ?>
                                     </dd>
                                 </div>
@@ -698,11 +698,11 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!target) return;
 
             tabButtons.forEach(b => {
-                b.classList.remove('border-indigo-600', 'text-indigo-700');
+                b.classList.remove('border-red-500', 'text-red-600');
                 b.classList.add('border-transparent', 'text-slate-500');
             });
             btn.classList.remove('border-transparent', 'text-slate-500');
-            btn.classList.add('border-indigo-600', 'text-indigo-700');
+            btn.classList.add('border-red-500', 'text-red-600');
 
             tabPanels.forEach(panel => {
                 if (panel.getAttribute('data-tab-panel') === target) {
@@ -713,5 +713,14 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
     });
+
+    // If URL has a hash (e.g. #attendance), open that section by default
+    const hash = window.location.hash ? window.location.hash.substring(1) : '';
+    if (hash) {
+        const initialBtn = document.querySelector('[data-tab-target="' + hash + '"]');
+        if (initialBtn) {
+            initialBtn.click();
+        }
+    }
 });
 </script>

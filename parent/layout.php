@@ -49,8 +49,43 @@ $page_title = $page_title ?? 'Parent';
                 <div class="text-xs text-slate-500 mt-0.5">Parent Portal</div>
             </div>
         </div>
-        <nav class="mt-6 space-y-1">
-            <a href="dashboard.php" class="block px-3 py-2 rounded-lg text-sm font-medium text-indigo-700 bg-indigo-50">Dashboard</a>
+        <nav class="mt-6 space-y-2">
+            <a href="dashboard.php"
+               class="block px-3 py-2 rounded-lg text-sm font-medium text-indigo-700 bg-indigo-50">
+                Dashboard
+            </a>
+            <div class="mt-3 space-y-0.5 text-xs font-medium">
+                <button type="button"
+                        data-tab-target="wards"
+                        class="w-full text-left px-3 py-1.5 rounded-lg border-l-2 border-transparent text-slate-500 hover:bg-slate-50">
+                    Wards
+                </button>
+                <button type="button"
+                        data-tab-target="attendance"
+                        class="w-full text-left px-3 py-1.5 rounded-lg border-l-2 border-transparent text-slate-500 hover:bg-slate-50">
+                    Attendance
+                </button>
+                <button type="button"
+                        data-tab-target="grades"
+                        class="w-full text-left px-3 py-1.5 rounded-lg border-l-2 border-transparent text-slate-500 hover:bg-slate-50">
+                    Grades
+                </button>
+                <button type="button"
+                        data-tab-target="fees"
+                        class="w-full text-left px-3 py-1.5 rounded-lg border-l-2 border-transparent text-slate-500 hover:bg-slate-50">
+                    Fees
+                </button>
+                <button type="button"
+                        data-tab-target="reports"
+                        class="w-full text-left px-3 py-1.5 rounded-lg border-l-2 border-transparent text-slate-500 hover:bg-slate-50">
+                    Reports
+                </button>
+                <button type="button"
+                        data-tab-target="analytics"
+                        class="w-full text-left px-3 py-1.5 rounded-lg border-l-2 border-transparent text-slate-500 hover:bg-slate-50">
+                    Analytics
+                </button>
+            </div>
         </nav>
         <form method="post" action="../logout.php" class="mt-6">
             <button type="submit" class="w-full px-3 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Logout</button>
