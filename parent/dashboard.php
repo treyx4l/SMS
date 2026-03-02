@@ -722,5 +722,9 @@ document.addEventListener('DOMContentLoaded', function () {
             initialBtn.click();
         }
     }
+
+    if (window.lucide) {
+        lucide.createIcons();
+    }
 });
 </script>
