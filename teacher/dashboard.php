@@ -128,7 +128,8 @@ if ($teacherId && $schoolId) {
     if ($res && $res->num_rows > 0 && $classIds) {
         $today = date('Y-m-d');
         $placeholders = implode(',', array_fill(0, count($classIds), '?'));
-        $types = 'i' . str_repeat('i', count($classIds));
+        // school_id (int), date (string), then one int per class_id
+        $types = 'is' . str_repeat('i', count($classIds));
         $sql = "
             SELECT COUNT(DISTINCT class_id) AS c
             FROM attendance
