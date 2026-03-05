@@ -516,92 +516,111 @@ $stmt->close();
     <?php endif; ?>
 </div>
 
-<!-- Edit Teacher Modal -->
+<!-- Edit Teacher Modal (landscape layout) -->
 <div id="editTeacherModal" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm overflow-y-auto py-8">
-    <div class="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg mx-4 my-auto">
-        <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+    <div class="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-4xl mx-4 my-auto">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
             <span class="text-sm font-semibold text-slate-800">Edit Teacher</span>
             <button type="button" onclick="closeEditTeacherModal()" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
                 <i data-lucide="x" class="w-4 h-4"></i>
             </button>
         </div>
-        <form method="post" enctype="multipart/form-data" id="editTeacherForm" class="p-5">
+        <form method="post" enctype="multipart/form-data" id="editTeacherForm" class="px-6 py-5">
             <input type="hidden" name="action" value="update">
             <input type="hidden" name="id" id="editTeacherId">
 
-            <div class="flex items-center gap-4 mb-4">
-                <div class="w-16 h-16 rounded-xl border-2 border-slate-200 flex items-center justify-center bg-slate-50 overflow-hidden shrink-0" id="editTeacherPhotoPreview">
-                    <i data-lucide="user" class="w-8 h-8 text-slate-300"></i>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Photo</label>
-                    <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp"
-                           class="block w-full text-sm text-slate-500 file:mr-2 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-sm file:font-medium hover:file:bg-indigo-100">
-                </div>
-            </div>
-
-            <div class="space-y-4 mb-4">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Full Name *</label>
-                    <input type="text" name="full_name" id="editTeacherName" required
-                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Email</label>
-                    <input type="email" name="email" id="editTeacherEmail"
-                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Phone</label>
-                    <input type="text" name="phone" id="editTeacherPhone"
-                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">New password (leave blank to keep)</label>
-                    <input type="password" name="new_password" id="editTeacherNewPassword" placeholder="Min. 6 characters"
-                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Confirm new password</label>
-                    <input type="password" name="new_password_confirm" id="editTeacherNewPasswordConfirm" placeholder="Repeat if changing"
-                           class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                </div>
-            </div>
-
-            <?php if ($tcsExists && ($classes || $subjects)): ?>
-            <div class="border-t border-slate-200 pt-4 mb-4">
-                <p class="text-xs font-semibold text-slate-500 uppercase mb-2">Assign Classes & Subjects</p>
-                <p class="text-[11px] text-slate-500 mb-2">Select classes and subjects this teacher teaches. All combinations will be saved.</p>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-[11px] font-medium text-slate-600 mb-1.5">Classes</label>
-                        <div class="max-h-32 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1">
-                            <?php foreach ($classes as $c): ?>
-                            <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-50 rounded px-2 py-1 -mx-2">
-                                <input type="checkbox" name="class_ids[]" value="<?= (int)$c['id'] ?>" class="edit-class-cb rounded border-slate-300 text-indigo-600">
-                                <span class="text-xs text-slate-700"><?= htmlspecialchars($c['name']) ?><?= !empty($c['section']) ? ' ' . htmlspecialchars($c['section']) : '' ?></span>
-                            </label>
-                            <?php endforeach; ?>
-                            <?php if (!$classes): ?><p class="text-xs text-slate-500 px-2">No classes</p><?php endif; ?>
+            <div class="grid grid-cols-1 lg:grid-cols-[260px,1fr] gap-6 mb-5">
+                <!-- Left: profile -->
+                <div class="space-y-4 border border-slate-100 rounded-xl p-4 bg-slate-50/60">
+                    <div class="flex items-center gap-4">
+                        <div class="w-20 h-20 rounded-xl border-2 border-slate-200 flex items-center justify-center bg-white overflow-hidden shrink-0" id="editTeacherPhotoPreview">
+                            <i data-lucide="user" class="w-10 h-10 text-slate-300"></i>
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Photo</label>
+                            <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp"
+                                   class="block w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:font-medium hover:file:bg-indigo-100">
+                            <p class="mt-1 text-[10px] text-slate-400">Square images (e.g. 400×400px) look best.</p>
                         </div>
                     </div>
-                    <div>
-                        <label class="block text-[11px] font-medium text-slate-600 mb-1.5">Subjects</label>
-                        <div class="max-h-32 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1">
-                            <?php foreach ($subjects as $s): ?>
-                            <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-50 rounded px-2 py-1 -mx-2">
-                                <input type="checkbox" name="subject_ids[]" value="<?= (int)$s['id'] ?>" class="edit-subject-cb rounded border-slate-300 text-indigo-600">
-                                <span class="text-xs text-slate-700"><?= htmlspecialchars($s['name']) ?><?= $s['code'] ? ' (' . htmlspecialchars($s['code']) . ')' : '' ?></span>
-                            </label>
-                            <?php endforeach; ?>
-                            <?php if (!$subjects): ?><p class="text-xs text-slate-500 px-2">No subjects</p><?php endif; ?>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Full Name *</label>
+                            <input type="text" name="full_name" id="editTeacherName" required
+                                   class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Email</label>
+                            <input type="email" name="email" id="editTeacherEmail"
+                                   class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Phone</label>
+                            <input type="text" name="phone" id="editTeacherPhone"
+                                   class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
                         </div>
                     </div>
                 </div>
-            </div>
-            <?php endif; ?>
 
-            <div class="flex gap-2">
+                <!-- Right: login + teaching assignments -->
+                <div class="space-y-4">
+                    <div class="border border-slate-100 rounded-xl p-4 bg-white">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-2">Login &amp; security</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">New password (optional)</label>
+                                <input type="password" name="new_password" id="editTeacherNewPassword" placeholder="Leave blank to keep"
+                                       class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-slate-500 uppercase mb-1.5">Confirm new password</label>
+                                <input type="password" name="new_password_confirm" id="editTeacherNewPasswordConfirm" placeholder="Repeat password"
+                                       class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                        </div>
+                        <p class="mt-2 text-[11px] text-slate-400">
+                            Changing the password here updates only the local login for this teacher.
+                        </p>
+                    </div>
+
+                    <?php if ($tcsExists && ($classes || $subjects)): ?>
+                    <div class="border border-slate-100 rounded-xl p-4 bg-white">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-2">Classes &amp; subjects</p>
+                        <p class="text-[11px] text-slate-500 mb-2">
+                            Assign teaching responsibilities. This works even if the teacher currently has no class or subject.
+                        </p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[11px] font-medium text-slate-600 mb-1.5">Classes</label>
+                                <div class="max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1">
+                                    <?php foreach ($classes as $c): ?>
+                                    <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-50 rounded px-2 py-1 -mx-2">
+                                        <input type="checkbox" name="class_ids[]" value="<?= (int)$c['id'] ?>" class="edit-class-cb rounded border-slate-300 text-indigo-600">
+                                        <span class="text-xs text-slate-700"><?= htmlspecialchars($c['name']) ?><?= !empty($c['section']) ? ' ' . htmlspecialchars($c['section']) : '' ?></span>
+                                    </label>
+                                    <?php endforeach; ?>
+                                    <?php if (!$classes): ?><p class="text-xs text-slate-500 px-2">No classes configured.</p><?php endif; ?>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-medium text-slate-600 mb-1.5">Subjects</label>
+                                <div class="max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1">
+                                    <?php foreach ($subjects as $s): ?>
+                                    <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-50 rounded px-2 py-1 -mx-2">
+                                        <input type="checkbox" name="subject_ids[]" value="<?= (int)$s['id'] ?>" class="edit-subject-cb rounded border-slate-300 text-indigo-600">
+                                        <span class="text-xs text-slate-700"><?= htmlspecialchars($s['name']) ?><?= $s['code'] ? ' (' . htmlspecialchars($s['code']) . ')' : '' ?></span>
+                                    </label>
+                                    <?php endforeach; ?>
+                                    <?php if (!$subjects): ?><p class="text-xs text-slate-500 px-2">No subjects configured.</p><?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 border-t border-slate-100 pt-4">
                 <button type="button" onclick="closeEditTeacherModal()" class="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
                 <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">
                     <i data-lucide="save" class="w-4 h-4 inline-block mr-1"></i> Save Changes
