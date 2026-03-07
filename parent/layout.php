@@ -179,6 +179,59 @@ function parentNavLink(string $check, string $current): string
         <header class="flex items-center justify-between mb-4">
             <h1 class="text-lg font-bold text-slate-900"><?= htmlspecialchars($page_title) ?></h1>
             <div class="flex items-center gap-3">
+                <!-- Messages -->
+                <button type="button"
+                        id="parentMessagesButton"
+                        class="relative inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 focus:outline-none"
+                        aria-label="Messages"
+                        title="Messages">
+                    <i data-lucide="message-circle" class="w-4 h-4"></i>
+                    <span class="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-indigo-500 text-white text-[9px] font-semibold">
+                        1
+                    </span>
+                </button>
+
+                <!-- Notifications -->
+                <div class="relative">
+                    <button type="button"
+                            id="parentNotificationsButton"
+                            class="relative inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 focus:outline-none"
+                            aria-label="Notifications"
+                            title="Notifications">
+                        <i data-lucide="bell" class="w-4 h-4"></i>
+                        <span class="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[9px] font-semibold">
+                            2
+                        </span>
+                    </button>
+                    <div id="parentNotificationsMenu"
+                         class="hidden absolute right-0 mt-2 w-60 bg-white border border-slate-200 rounded-xl shadow-lg py-1 text-[11px] text-slate-700 z-20">
+                        <div class="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
+                            <span class="text-[11px] font-semibold text-slate-800">Notifications</span>
+                            <span class="text-[10px] text-indigo-600 cursor-pointer hover:text-indigo-700">Mark all read</span>
+                        </div>
+                        <div class="px-3 pt-1 pb-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+                            Parents · Staff · Admin
+                        </div>
+                        <button type="button" class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left app-notif"
+                                data-notif-id="parent-fees" data-notif-title="Fees reminder" data-notif-body="Your ward has an upcoming fee deadline.">
+                            <span class="mt-1 w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                            <span>
+                                <span class="block text-[11px] font-medium text-slate-800">Fees reminder</span>
+                                <span class="block text-[10px] text-slate-500">Upcoming school fees due soon.</span>
+                            </span>
+                        </button>
+                        <button type="button" class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left app-notif"
+                                data-notif-id="parent-attendance" data-notif-title="Attendance update" data-notif-body="Recent attendance summary is available.">
+                            <span class="mt-1 w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            <span>
+                                <span class="block text-[11px] font-medium text-slate-800">Attendance update</span>
+                                <span class="block text-[10px] text-slate-500">Recent attendance summary is ready.</span>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Profile dropdown -->
                 <div class="relative">
                     <button type="button"
                             id="parentProfileButton"

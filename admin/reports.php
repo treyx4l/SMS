@@ -92,8 +92,8 @@ $s->close();
             <i data-lucide="bar-chart-2" class="w-4 h-4 text-indigo-500"></i>
         </div>
         <?php if ($classBreakdown): ?>
-        <div class="relative w-full overflow-hidden" style="height:220px; min-height:220px; max-height:220px;">
-            <canvas id="classChart" class="block w-full" style="height:220px !important; max-height:220px;"></canvas>
+        <div class="relative w-full overflow-hidden" style="height:180px; min-height:180px; max-height:180px;">
+            <canvas id="classChart" class="block w-full" style="height:180px !important; max-height:180px;"></canvas>
         </div>
         <?php else: ?>
         <div class="flex flex-col items-center justify-center h-40 text-slate-400">

@@ -242,30 +242,28 @@ function teacherNavLink(string $check, string $current): string
                         </span>
                     </button>
                     <div id="teacherNotificationsMenu"
-                         class="hidden absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-lg py-1 text-[11px] text-slate-700 z-20">
+                         class="hidden absolute right-0 mt-2 w-60 bg-white border border-slate-200 rounded-xl shadow-lg py-1 text-[11px] text-slate-700 z-20">
                         <div class="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
                             <span class="text-[11px] font-semibold text-slate-800">Notifications</span>
                             <span class="text-[10px] text-emerald-600 cursor-pointer hover:text-emerald-700">Mark all read</span>
                         </div>
-                        <button type="button" class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left">
+                        <div class="px-3 pt-1 pb-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+                            Admin &amp; Staff
+                        </div>
+                        <button type="button" class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left app-notif"
+                                data-notif-id="teacher-attendance" data-notif-title="Attendance reminder" data-notif-body="Don’t forget to mark today’s register.">
                             <span class="mt-1 w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                             <span>
                                 <span class="block text-[11px] font-medium text-slate-800">Attendance reminder</span>
                                 <span class="block text-[10px] text-slate-500">Don&rsquo;t forget to mark JSS1 A today.</span>
                             </span>
                         </button>
-                        <button type="button" class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left">
+                        <button type="button" class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left app-notif"
+                                data-notif-id="teacher-grading" data-notif-title="Grading pending" data-notif-body="You have unposted grades waiting to be submitted.">
                             <span class="mt-1 w-1.5 h-1.5 rounded-full bg-violet-500"></span>
                             <span>
                                 <span class="block text-[11px] font-medium text-slate-800">Grading pending</span>
                                 <span class="block text-[10px] text-slate-500">24 scripts left for Fractions test.</span>
-                            </span>
-                        </button>
-                        <button type="button" class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left">
-                            <span class="mt-1 w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                            <span>
-                                <span class="block text-[11px] font-medium text-slate-800">Lesson note</span>
-                                <span class="block text-[10px] text-slate-500">Week 3 Integers note still in draft.</span>
                             </span>
                         </button>
                         <div class="border-t border-slate-100 mt-1 pt-1">

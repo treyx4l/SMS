@@ -137,14 +137,53 @@ $growth = $lastMonth > 0 ? round((($thisMonth - $lastMonth) / $lastMonth) * 100,
     </div>
 </div>
 
-<!-- Insight cards -->
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<!-- Additional analytics -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+    <!-- Gender distribution -->
+    <div class="bg-white border border-slate-200 rounded-xl p-5">
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <h3 class="text-sm font-semibold text-slate-800">Gender distribution</h3>
+                <p class="text-xs text-slate-400 mt-0.5">Active students by gender</p>
+            </div>
+            <i data-lucide="pie-chart" class="w-4 h-4 text-indigo-500"></i>
+        </div>
+        <div class="chart-container" style="position:relative;height:160px;width:100%;min-height:160px;max-height:160px;">
+            <canvas id="genderChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Graduation summary -->
+    <div class="bg-white border border-slate-200 rounded-xl p-5">
+        <div class="flex items-center gap-3 mb-3">
+            <div class="w-8 h-8 rounded-lg bg-slate-900/90 text-white flex items-center justify-center">
+                <i data-lucide="award" class="w-4 h-4"></i>
+            </div>
+            <h3 class="text-sm font-semibold text-slate-800">Graduation summary</h3>
+        </div>
+        <?php
+        $graduatedCount = 0;
+        if ($hasGraduatedCol) {
+            $gs = $conn->prepare("SELECT COUNT(*) AS c FROM students WHERE school_id=? AND is_graduated=1");
+            $gs->bind_param('i', $schoolId);
+            $gs->execute();
+            $graduatedCount = (int) ($gs->get_result()->fetch_assoc()['c'] ?? 0);
+            $gs->close();
+        }
+        ?>
+        <p class="text-xs text-slate-500 leading-relaxed">
+            <?= $graduatedCount ?> student<?= $graduatedCount === 1 ? '' : 's' ?> have graduated across all years.
+            Active students shown elsewhere exclude graduates so your ratios stay accurate.
+        </p>
+    </div>
+
+    <!-- Engagement summary -->
     <div class="bg-white border border-slate-200 rounded-xl p-5">
         <div class="flex items-center gap-3 mb-3">
             <div class="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
                 <i data-lucide="users" class="w-4 h-4 text-indigo-600"></i>
             </div>
-            <h3 class="text-sm font-semibold text-slate-800">Community Size</h3>
+            <h3 class="text-sm font-semibold text-slate-800">Community size</h3>
         </div>
         <p class="text-xs text-slate-500 leading-relaxed">
             Your school community has <strong class="text-slate-700"><?= $totals['students'] + $totals['teachers'] + $totals['parents'] ?></strong> total members across students, teachers, and parents.
@@ -233,4 +272,49 @@ new Chart(document.getElementById('classSizeChart').getContext('2d'), {
     }
 });
 <?php endif; ?>
+
+// Gender distribution doughnut
+(function () {
+    const ctx = document.getElementById('genderChart').getContext('2d');
+    const data = {
+        labels: ['Male','Female','Other/Unspecified'],
+        datasets: [{
+            data: <?php
+                $gm = $gf = $go = 0;
+                $sqlGender = "SELECT gender, COUNT(*) AS c FROM students WHERE school_id=?";
+                if ($hasGraduatedCol) {
+                    $sqlGender .= " AND (is_graduated IS NULL OR is_graduated = 0)";
+                }
+                $sqlGender .= " GROUP BY gender";
+                $gs2 = $conn->prepare($sqlGender);
+                $gs2->bind_param('i', $schoolId);
+                $gs2->execute();
+                $gr = $gs2->get_result();
+                while ($row = $gr->fetch_assoc()) {
+                    $g = $row['gender'] ?? '';
+                    $c = (int) ($row['c'] ?? 0);
+                    if ($g === 'male') $gm += $c;
+                    elseif ($g === 'female') $gf += $c;
+                    else $go += $c;
+                }
+                $gs2->close();
+                echo json_encode([$gm, $gf, $go]);
+            ?>,
+            backgroundColor: ['#6366f1','#ec4899','#e5e7eb'],
+            borderWidth: 0
+        }]
+    };
+    new Chart(ctx, {
+        type: 'doughnut',
+        data,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '70%',
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+})();
 </script>

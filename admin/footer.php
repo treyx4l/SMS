@@ -82,6 +82,47 @@
             }
         });
     })();
+
+    // Browser notifications helper for all dashboards
+    (function () {
+        if (!('Notification' in window)) return;
+
+        function sendBrowserNotifications(prefix) {
+            if (Notification.permission !== 'granted') return;
+            const seenKey = prefix + '_seen_notifications';
+            let seen = [];
+            try {
+                seen = JSON.parse(localStorage.getItem(seenKey) || '[]');
+            } catch (_) {}
+
+            document.querySelectorAll('.app-notif').forEach(btn => {
+                const id    = btn.dataset.notifId;
+                const title = btn.dataset.notifTitle || 'School notification';
+                const body  = btn.dataset.notifBody  || '';
+                if (!id || seen.includes(id)) return;
+                try {
+                    new Notification(title, { body });
+                    seen.push(id);
+                } catch (_) {}
+            });
+
+            try {
+                localStorage.setItem(seenKey, JSON.stringify(seen));
+            } catch (_) {}
+        }
+
+        // Request permission when user first opens notifications, then fire
+        const adminNotifBtn = document.getElementById('adminNotificationsButton');
+        if (adminNotifBtn) {
+            adminNotifBtn.addEventListener('click', function () {
+                if (Notification.permission === 'default') {
+                    Notification.requestPermission().then(() => sendBrowserNotifications('admin'));
+                } else {
+                    sendBrowserNotifications('admin');
+                }
+            });
+        }
+    })();
 </script>
 </body>
 </html>

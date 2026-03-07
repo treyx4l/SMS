@@ -290,30 +290,41 @@ function navLink(string $check, string $current): string {
                         </span>
                     </button>
                     <div id="adminNotificationsMenu"
-                         class="hidden absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-lg py-1 text-[11px] text-slate-700 z-20">
+                         class="hidden absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-lg py-1 text-[11px] text-slate-700 z-20">
                         <div class="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
                             <span class="text-[11px] font-semibold text-slate-800">Notifications</span>
                             <span class="text-[10px] text-indigo-600 cursor-pointer hover:text-indigo-700">Mark all read</span>
                         </div>
-                        <button type="button" class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left">
+                        <!-- Parents / Staff / Admin group -->
+                        <div class="px-3 pt-1 pb-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+                            Parents · Staff · Admin
+                        </div>
+                        <button type="button" class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left app-notif"
+                                data-notif-id="admin-parent-fees" data-notif-title="New parent message" data-notif-body="A parent has sent a message about outstanding fees.">
                             <span class="mt-1 w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                            <span>
+                                <span class="block text-[11px] font-medium text-slate-800">Parent fees enquiry</span>
+                                <span class="block text-[10px] text-slate-500">A parent has asked about outstanding school fees.</span>
+                            </span>
+                        </button>
+                        <!-- Admin & Staff group -->
+                        <div class="px-3 pt-2 pb-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+                            Admin &amp; Staff
+                        </div>
+                        <button type="button" class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left app-notif"
+                                data-notif-id="admin-new-teacher" data-notif-title="New teacher account" data-notif-body="Jane Smith was added to staff.">
+                            <span class="mt-1 w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                             <span>
                                 <span class="block text-[11px] font-medium text-slate-800">New teacher account</span>
                                 <span class="block text-[10px] text-slate-500">Jane Smith was added to staff.</span>
                             </span>
                         </button>
-                        <button type="button" class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left">
-                            <span class="mt-1 w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        <button type="button" class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left app-notif"
+                                data-notif-id="admin-lesson-plan" data-notif-title="Lesson plan submitted" data-notif-body="A new lesson plan awaits your approval.">
+                            <span class="mt-1 w-1.5 h-1.5 rounded-full bg-violet-500"></span>
                             <span>
                                 <span class="block text-[11px] font-medium text-slate-800">Lesson plan submitted</span>
                                 <span class="block text-[10px] text-slate-500">Week 3 Math plan awaits approval.</span>
-                            </span>
-                        </button>
-                        <button type="button" class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left">
-                            <span class="mt-1 w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                            <span>
-                                <span class="block text-[11px] font-medium text-slate-800">Settings update</span>
-                                <span class="block text-[10px] text-slate-500">School profile was modified.</span>
                             </span>
                         </button>
                         <div class="border-t border-slate-100 mt-1 pt-1">

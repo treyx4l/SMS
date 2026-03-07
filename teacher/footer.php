@@ -80,6 +80,44 @@
             }
         });
     })();
+
+    // Browser notifications for teacher (Admin & Staff group)
+    (function () {
+        if (!('Notification' in window)) return;
+
+        function sendTeacherNotifications() {
+            if (Notification.permission !== 'granted') return;
+            const key = 'teacher_seen_notifications';
+            let seen = [];
+            try {
+                seen = JSON.parse(localStorage.getItem(key) || '[]');
+            } catch (_) {}
+            document.querySelectorAll('.app-notif').forEach(btn => {
+                const id    = btn.dataset.notifId;
+                const title = btn.dataset.notifTitle || 'School notification';
+                const body  = btn.dataset.notifBody  || '';
+                if (!id || seen.includes(id)) return;
+                try {
+                    new Notification(title, { body });
+                    seen.push(id);
+                } catch (_) {}
+            });
+            try {
+                localStorage.setItem(key, JSON.stringify(seen));
+            } catch (_) {}
+        }
+
+        const notifBtn = document.getElementById('teacherNotificationsButton');
+        if (notifBtn) {
+            notifBtn.addEventListener('click', function () {
+                if (Notification.permission === 'default') {
+                    Notification.requestPermission().then(sendTeacherNotifications);
+                } else {
+                    sendTeacherNotifications();
+                }
+            });
+        }
+    })();
 </script>
 </body>
 </html>

@@ -6,12 +6,15 @@ $conn     = get_db_connection();
 $schoolId = current_school_id();
 
 // Use index_no if column exists, else admission_no for backward compatibility
-$hasIndexNo = false;
-$hasAdmissionNo = false;
+$hasIndexNo      = false;
+$hasAdmissionNo  = false;
+$hasNationality  = false;
 $res = $conn->query("SHOW COLUMNS FROM students LIKE 'index_no'");
 if ($res && $res->num_rows > 0) $hasIndexNo = true;
 $res = $conn->query("SHOW COLUMNS FROM students LIKE 'admission_no'");
 if ($res && $res->num_rows > 0) $hasAdmissionNo = true;
+$res = $conn->query("SHOW COLUMNS FROM students LIKE 'nationality'");
+if ($res && $res->num_rows > 0) $hasNationality = true;
 $idCol = $hasIndexNo ? 'index_no' : 'admission_no';
 
 $errors  = [];
@@ -30,6 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $gender       = !empty($_POST['gender']) ? $_POST['gender'] : null;
         $class_id     = !empty($_POST['class_id']) ? (int) $_POST['class_id'] : null;
         $phone        = trim($_POST['phone'] ?? '');
+        $address      = trim($_POST['address'] ?? '');
+        $nationality  = trim($_POST['nationality'] ?? '');
         $fingerprint  = trim($_POST['fingerprint_data'] ?? '');
 
         if ($first_name === '' || $last_name === '' || $index_no === '') {
@@ -55,21 +60,84 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($id) {
                 // Update
-                $set = $hasIndexNo
-                    ? "first_name=?, last_name=?, gender=?, index_no=?, class_id=?, phone=?, fingerprint_data=?"
-                    : "first_name=?, last_name=?, gender=?, admission_no=?, class_id=?, phone=?";
-                if ($hasAdmissionNo && $hasIndexNo) $set .= ", admission_no=?";
-                if ($hasIndexNo && $photoPath) $set .= ", photo_path=?";
-                $set .= " WHERE id=? AND school_id=?";
+                $setParts = [
+                    "first_name=?",
+                    "last_name=?",
+                    "gender=?",
+                ];
+                if ($hasIndexNo) {
+                    $setParts[] = "index_no=?";
+                } else {
+                    $setParts[] = "admission_no=?";
+                }
+                $setParts[] = "class_id=?";
+                $setParts[] = "phone=?";
+                $setParts[] = "address=?";
+                if ($hasNationality) {
+                    $setParts[] = "nationality=?";
+                }
+                if ($hasIndexNo) {
+                    $setParts[] = "fingerprint_data=?";
+                }
+                if ($hasAdmissionNo && $hasIndexNo) {
+                    $setParts[] = "admission_no=?";
+                }
+                if ($hasIndexNo && $photoPath) {
+                    $setParts[] = "photo_path=?";
+                }
+                $set = implode(', ', $setParts) . " WHERE id=? AND school_id=?";
 
                 $stmt = $conn->prepare("UPDATE students SET {$set}");
-                $params = [$first_name, $last_name, $gender, $index_no, $class_id, $phone];
-                if ($hasIndexNo) $params[] = $fingerprint ?: null;
-                if ($hasAdmissionNo && $hasIndexNo) $params[] = $index_no;
-                if ($hasIndexNo && $photoPath) $params[] = $photoPath;
+
+                // Build params
+                $params = [
+                    $first_name,
+                    $last_name,
+                    $gender,
+                ];
+                if ($hasIndexNo) {
+                    $params[] = $index_no;
+                } else {
+                    $params[] = $admission_no;
+                }
+                $params[] = $class_id;
+                $params[] = $phone;
+                $params[] = $address;
+                if ($hasNationality) {
+                    $params[] = $nationality;
+                }
+                if ($hasIndexNo) {
+                    $params[] = $fingerprint ?: null;
+                }
+                if ($hasAdmissionNo && $hasIndexNo) {
+                    $params[] = $index_no;
+                }
+                if ($hasIndexNo && $photoPath) {
+                    $params[] = $photoPath;
+                }
                 $params[] = $id;
                 $params[] = $schoolId;
-                $types = 'ssssss' . ($hasIndexNo ? 's' : '') . ($hasAdmissionNo && $hasIndexNo ? 's' : '') . ($hasIndexNo && $photoPath ? 's' : '') . 'ii';
+
+                // Build types
+                $types = 'sss';           // first_name, last_name, gender
+                $types .= 's';            // index_no or admission_no
+                $types .= 'i';            // class_id
+                $types .= 's';            // phone
+                $types .= 's';            // address
+                if ($hasNationality) {
+                    $types .= 's';
+                }
+                if ($hasIndexNo) {
+                    $types .= 's';        // fingerprint_data
+                }
+                if ($hasAdmissionNo && $hasIndexNo) {
+                    $types .= 's';        // admission_no copy
+                }
+                if ($hasIndexNo && $photoPath) {
+                    $types .= 's';        // photo_path
+                }
+                $types .= 'ii';           // id, school_id
+
                 $stmt->bind_param($types, ...$params);
                 $stmt->execute();
                 $stmt->close();
@@ -87,21 +155,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($errors) { /* skip insert */ } else {
                 // Insert
                 $cols = $hasIndexNo
-                    ? "school_id, first_name, last_name, gender, index_no, class_id, phone, fingerprint_data"
-                    : "school_id, first_name, last_name, gender, admission_no, class_id, phone";
+                    ? "school_id, first_name, last_name, gender, index_no, class_id, phone, address"
+                    : "school_id, first_name, last_name, gender, admission_no, class_id, phone, address";
+                if ($hasNationality) $cols .= ", nationality";
+                if ($hasIndexNo) $cols .= ", fingerprint_data";
                 if ($hasAdmissionNo && $hasIndexNo) $cols .= ", admission_no";
                 if ($hasIndexNo && $photoPath) $cols .= ", photo_path";
 
-                $phs = $hasIndexNo ? "?, ?, ?, ?, ?, ?, ?, ?" : "?, ?, ?, ?, ?, ?, ?";
+                $phs = $hasIndexNo ? "?, ?, ?, ?, ?, ?, ?, ?" : "?, ?, ?, ?, ?, ?, ?, ?";
+                if ($hasNationality) $phs .= ", ?";
+                if ($hasIndexNo) $phs .= ", ?";
                 if ($hasAdmissionNo && $hasIndexNo) $phs .= ", ?";
                 if ($hasIndexNo && $photoPath) $phs .= ", ?";
 
                 $stmt = $conn->prepare("INSERT INTO students ({$cols}) VALUES ({$phs})");
-                $params = [$schoolId, $first_name, $last_name, $gender, $index_no, $class_id, $phone];
+
+                $params = [$schoolId, $first_name, $last_name, $gender, $hasIndexNo ? $index_no : $admission_no, $class_id, $phone, $address];
+                if ($hasNationality) $params[] = $nationality;
                 if ($hasIndexNo) $params[] = $fingerprint ?: null;
                 if ($hasAdmissionNo && $hasIndexNo) $params[] = $index_no;
                 if ($hasIndexNo && $photoPath) $params[] = $photoPath;
-                $types = 'issssss' . ($hasIndexNo ? 's' : '') . ($hasAdmissionNo && $hasIndexNo ? 's' : '') . ($hasIndexNo && $photoPath ? 's' : '');
+
+                $types = 'isssss' . 'i' . 's'; // school_id, first,last,gender,id/admission, class_id, phone, address
+                if ($hasNationality) $types .= 's';
+                if ($hasIndexNo) $types .= 's'; // fingerprint
+                if ($hasAdmissionNo && $hasIndexNo) $types .= 's'; // admission copy
+                if ($hasIndexNo && $photoPath) $types .= 's'; // photo_path
+
                 $stmt->bind_param($types, ...$params);
                 $stmt->execute();
                 $stmt->close();
@@ -157,6 +237,9 @@ $page = min($page, max(1, $totalPages));
 $students = [];
 $idColSel = $hasIndexNo ? "s.index_no" : "s.admission_no AS index_no";
 $extraCols = $hasIndexNo ? ", s.photo_path, s.fingerprint_data, s.class_id" : ", s.class_id";
+// Always select address and nationality when present
+$extraCols .= ", s.address";
+if ($hasNationality) $extraCols .= ", s.nationality";
 $where = "s.school_id = ?";
 $params = [$schoolId];
 $types = 'i';
@@ -241,6 +324,7 @@ $stmt->close();
                     <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Index No</th>
                     <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Gender</th>
                     <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Class</th>
+                    <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Address</th>
                     <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Phone</th>
                     <th class="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Actions</th>
                 </tr>
@@ -267,6 +351,7 @@ $stmt->close();
                     <td class="px-4 py-3 text-slate-600"><?= htmlspecialchars($s['index_no']) ?></td>
                     <td class="px-4 py-3 text-slate-500"><?= htmlspecialchars($s['gender'] ?? '-') ?></td>
                     <td class="px-4 py-3 text-slate-500"><?= htmlspecialchars($s['class_name'] ? $s['class_name'] . ($s['section'] ? ' ' . $s['section'] : '') : 'Unassigned') ?></td>
+                    <td class="px-4 py-3 text-slate-500 text-xs"><?= htmlspecialchars($s['address'] ?? '-') ?></td>
                     <td class="px-4 py-3 text-slate-500"><?= htmlspecialchars($s['phone'] ?? '-') ?></td>
                     <td class="px-4 py-3 text-right">
                         <div class="flex items-center justify-end gap-2">
@@ -352,8 +437,18 @@ foreach ($classes as $c) {
                     <input type="text" name="index_no" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                 </div>
                 <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Home Address</label>
+                    <input type="text" name="address" placeholder="Student home address"
+                           class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                </div>
+                <div>
                     <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Photo</label>
                     <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Nationality</label>
+                    <input type="text" name="nationality" placeholder="e.g. Nigerian"
+                           class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Fingerprint (optional)</label>
@@ -439,11 +534,19 @@ foreach ($classes as $c) {
                     <input type="text" name="index_no" id="editIndexNo" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
                 </div>
                 <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Home Address</label>
+                    <input type="text" name="address" id="editAddress" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
                     <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Photo</label>
                     <div class="flex items-center gap-3">
                         <img id="editPhotoPreview" src="" alt="" class="w-14 h-14 rounded-lg object-cover bg-slate-100 hidden">
                         <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp" class="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm">
                     </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Nationality</label>
+                    <input type="text" name="nationality" id="editNationality" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Fingerprint (optional)</label>
@@ -536,6 +639,10 @@ function editStudent(s) {
     document.getElementById('editFirstName').value = s.first_name || '';
     document.getElementById('editLastName').value = s.last_name || '';
     document.getElementById('editIndexNo').value = s.index_no || '';
+    document.getElementById('editAddress').value = s.address || '';
+    if (document.getElementById('editNationality')) {
+        document.getElementById('editNationality').value = s.nationality || '';
+    }
     document.getElementById('editFingerprint').value = s.fingerprint_data || '';
     document.getElementById('editGender').value = s.gender || '';
     document.getElementById('editClassId').value = s.class_id || '';
