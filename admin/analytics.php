@@ -5,6 +5,13 @@ require_once __DIR__ . '/layout.php';
 $conn     = get_db_connection();
 $schoolId = current_school_id();
 
+// Detect graduation column
+$hasGraduatedCol = false;
+$res = $conn->query("SHOW COLUMNS FROM students LIKE 'is_graduated'");
+if ($res && $res->num_rows > 0) {
+    $hasGraduatedCol = true;
+}
+
 // Monthly data for last 12 months
 $months = [];
 $studentsByMonth = [];
@@ -15,7 +22,11 @@ for ($i = 11; $i >= 0; $i--) {
     $m     = date('m', strtotime("-{$i} months"));
     $months[] = $label;
 
-    $s = $conn->prepare("SELECT COUNT(*) AS c FROM students WHERE school_id=? AND YEAR(created_at)=? AND MONTH(created_at)=?");
+    $sql = "SELECT COUNT(*) AS c FROM students WHERE school_id=? AND YEAR(created_at)=? AND MONTH(created_at)=?";
+    if ($hasGraduatedCol) {
+        $sql .= " AND (is_graduated IS NULL OR is_graduated = 0)";
+    }
+    $s = $conn->prepare($sql);
     $s->bind_param('iii',$schoolId,$y,$m); $s->execute();
     $studentsByMonth[] = (int)($s->get_result()->fetch_assoc()['c'] ?? 0); $s->close();
 
@@ -26,7 +37,12 @@ for ($i = 11; $i >= 0; $i--) {
 
 // Class sizes
 $classData = [];
-$s = $conn->prepare("SELECT c.name, COUNT(st.id) AS cnt FROM classes c LEFT JOIN students st ON st.class_id=c.id AND st.school_id=c.school_id WHERE c.school_id=? GROUP BY c.id,c.name ORDER BY cnt DESC LIMIT 8");
+$sql = "SELECT c.name, COUNT(st.id) AS cnt FROM classes c LEFT JOIN students st ON st.class_id=c.id AND st.school_id=c.school_id";
+if ($hasGraduatedCol) {
+    $sql .= " AND (st.is_graduated IS NULL OR st.is_graduated = 0)";
+}
+$sql .= " WHERE c.school_id=? GROUP BY c.id,c.name ORDER BY cnt DESC LIMIT 8";
+$s = $conn->prepare($sql);
 $s->bind_param('i',$schoolId); $s->execute();
 $res = $s->get_result();
 while ($row = $res->fetch_assoc()) $classData[] = $row;
@@ -35,7 +51,11 @@ $s->close();
 // Total counts
 $totals = [];
 foreach (['students','teachers','parents','classes'] as $tbl) {
-    $s = $conn->prepare("SELECT COUNT(*) AS c FROM {$tbl} WHERE school_id=?");
+    if ($tbl === 'students' && $hasGraduatedCol) {
+        $s = $conn->prepare("SELECT COUNT(*) AS c FROM students WHERE school_id=? AND (is_graduated IS NULL OR is_graduated = 0)");
+    } else {
+        $s = $conn->prepare("SELECT COUNT(*) AS c FROM {$tbl} WHERE school_id=?");
+    }
     $s->bind_param('i',$schoolId); $s->execute();
     $totals[$tbl] = (int)($s->get_result()->fetch_assoc()['c'] ?? 0); $s->close();
 }

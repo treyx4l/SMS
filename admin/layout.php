@@ -153,6 +153,10 @@ function navLink(string $check, string $current): string {
                         <i data-lucide="graduation-cap" class="w-4 h-4 shrink-0"></i>
                         <span>Students</span>
                     </a>
+                    <a href="graduated_students.php" class="<?= navLink('Graduated Students', $page_title) ?>">
+                        <i data-lucide="award" class="w-4 h-4 shrink-0"></i>
+                        <span>Graduated students</span>
+                    </a>
                     <a href="promotion.php" class="<?= navLink('Promotion', $page_title) ?>">
                         <i data-lucide="chevrons-up" class="w-4 h-4 shrink-0"></i>
                         <span>Promotion</span>

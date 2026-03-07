@@ -8,6 +8,13 @@ $schoolId = current_school_id();
 $errors  = [];
 $success = null;
 
+// Check if graduation columns exist
+$hasGraduatedCol = false;
+$res = $conn->query("SHOW COLUMNS FROM students LIKE 'is_graduated'");
+if ($res && $res->num_rows > 0) {
+    $hasGraduatedCol = true;
+}
+
 // Load classes for selectors
 $classes = [];
 $stmt = $conn->prepare("SELECT id, name, section FROM classes WHERE school_id = ? ORDER BY name");
@@ -24,29 +31,50 @@ function class_label(array $c): string {
     return $c['name'] . (!empty($c['section']) ? ' ' . $c['section'] : '');
 }
 
-// Handle promotion POST
+// Handle promotion / graduation POST
 $fromClassId = (int) ($_POST['from_class_id'] ?? ($_GET['from_class_id'] ?? 0));
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'promote') {
-    $toClassId    = (int) ($_POST['to_class_id'] ?? 0);
-    $studentIds   = isset($_POST['student_ids']) && is_array($_POST['student_ids'])
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action     = $_POST['action'] ?? '';
+    $toClassId  = (int) ($_POST['to_class_id'] ?? 0);
+    $studentIds = isset($_POST['student_ids']) && is_array($_POST['student_ids'])
         ? array_map('intval', array_filter($_POST['student_ids'])) : [];
     $fromClassId  = (int) ($_POST['from_class_id'] ?? 0);
 
-    if (!$fromClassId || !$toClassId) {
-        $errors[] = 'Please select both source and destination classes.';
-    }
-    if (!$studentIds) {
-        $errors[] = 'Select at least one student to promote.';
-    }
-
-    if (!$errors) {
-        $stmt = $conn->prepare("UPDATE students SET class_id = ? WHERE id = ? AND school_id = ? AND class_id = ?");
-        foreach ($studentIds as $sid) {
-            $stmt->bind_param('iiii', $toClassId, $sid, $schoolId, $fromClassId);
-            $stmt->execute();
+    if ($action === 'promote') {
+        if (!$fromClassId || !$toClassId) {
+            $errors[] = 'Please select both source and destination classes.';
         }
-        $stmt->close();
-        $success = 'Selected student(s) promoted successfully. Unselected students remain in their current class (repeat).';
+        if (!$studentIds) {
+            $errors[] = 'Select at least one student to promote.';
+        }
+
+        if (!$errors) {
+            $stmt = $conn->prepare("UPDATE students SET class_id = ? WHERE id = ? AND school_id = ? AND class_id = ?");
+            foreach ($studentIds as $sid) {
+                $stmt->bind_param('iiii', $toClassId, $sid, $schoolId, $fromClassId);
+                $stmt->execute();
+            }
+            $stmt->close();
+            $success = 'Selected student(s) promoted successfully. Unselected students remain in their current class (repeat).';
+        }
+    } elseif ($action === 'graduate') {
+        if (!$hasGraduatedCol) {
+            $errors[] = 'Graduation is not configured. Please run the students graduation migration first.';
+        } elseif (!$studentIds) {
+            $errors[] = 'Select at least one student to graduate.';
+        } else {
+            $stmt = $conn->prepare("
+                UPDATE students
+                SET is_graduated = 1, graduated_at = IFNULL(graduated_at, NOW())
+                WHERE id = ? AND school_id = ?
+            ");
+            foreach ($studentIds as $sid) {
+                $stmt->bind_param('ii', $sid, $schoolId);
+                $stmt->execute();
+            }
+            $stmt->close();
+            $success = 'Selected student(s) marked as graduated and removed from active counts.';
+        }
     }
 }
 
@@ -61,7 +89,12 @@ foreach ($classes as $c) {
 
 $students = [];
 if ($promoteFromClass) {
-    $stmt = $conn->prepare("SELECT id, first_name, last_name, gender, index_no, admission_no FROM students WHERE school_id = ? AND class_id = ? ORDER BY first_name, last_name");
+    $whereExtra = '';
+    if ($hasGraduatedCol) {
+        $whereExtra = ' AND (is_graduated IS NULL OR is_graduated = 0)';
+    }
+    $sql = "SELECT id, first_name, last_name, gender, index_no, admission_no FROM students WHERE school_id = ? AND class_id = ?{$whereExtra} ORDER BY first_name, last_name";
+    $stmt = $conn->prepare($sql);
     $stmt->bind_param('ii', $schoolId, $fromClassId);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -123,30 +156,9 @@ if ($promoteFromClass) {
         <div class="flex items-center gap-2">
             <i data-lucide="chevrons-up" class="w-4 h-4 text-indigo-500"></i>
             <span class="text-sm font-semibold text-slate-800">
-                Promote from <?= htmlspecialchars(class_label($promoteFromClass)) ?>
+                Promote or graduate from <?= htmlspecialchars(class_label($promoteFromClass)) ?>
             </span>
         </div>
-        <form method="post" class="flex items-center gap-2">
-            <input type="hidden" name="action" value="promote">
-            <input type="hidden" name="from_class_id" value="<?= (int)$fromClassId ?>">
-            <label class="text-xs text-slate-500">
-                Promote into:
-                <select name="to_class_id" class="ml-1 px-2 py-1 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500">
-                    <option value="0">Select next class…</option>
-                    <?php foreach ($classes as $c): ?>
-                    <?php if ((int)$c['id'] !== $fromClassId): ?>
-                    <option value="<?= (int)$c['id'] ?>">
-                        <?= htmlspecialchars(class_label($c)) ?>
-                    </option>
-                    <?php endif; ?>
-                    <?php endforeach; ?>
-                </select>
-            </label>
-            <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-700">
-                <i data-lucide="arrow-up-right" class="w-3 h-3"></i>
-                Promote selected
-            </button>
-        </form>
     </div>
 
     <div class="overflow-x-auto">
@@ -190,10 +202,9 @@ if ($promoteFromClass) {
 
     <!-- Hidden form that actually submits selected IDs (checkboxes use form attribute) -->
     <form id="promotionForm" method="post" class="px-5 py-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-        <input type="hidden" name="action" value="promote">
         <input type="hidden" name="from_class_id" value="<?= (int)$fromClassId ?>">
         <div>
-            Select students to move up. Those not selected will remain in <?= htmlspecialchars(class_label($promoteFromClass)) ?> (repeat).
+            Select students to move up or graduate. Those not selected will remain in <?= htmlspecialchars(class_label($promoteFromClass)) ?> (repeat).
         </div>
         <div class="flex items-center gap-2">
             <label class="text-xs text-slate-500">
@@ -209,10 +220,16 @@ if ($promoteFromClass) {
                     <?php endforeach; ?>
                 </select>
             </label>
-            <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700">
+            <button type="submit" name="action" value="promote" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700">
                 <i data-lucide="arrow-up-right" class="w-3 h-3"></i>
                 Promote selected
             </button>
+            <?php if ($hasGraduatedCol): ?>
+            <button type="submit" name="action" value="graduate" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-medium hover:bg-slate-800">
+                <i data-lucide="graduation-cap" class="w-3 h-3"></i>
+                Graduate selected
+            </button>
+            <?php endif; ?>
         </div>
     </form>
 </div>
