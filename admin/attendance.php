@@ -95,13 +95,14 @@ if ($tablesExist) {
         <p class="text-xs text-slate-500 mt-0.5">View only — teachers mark attendance</p>
     </div>
     <form method="get" class="flex flex-wrap gap-2 items-center">
-        <select name="class_id" onchange="this.form.submit()" class="px-3 py-2 border border-slate-200 rounded-lg text-sm">
+        <select name="class_id" class="px-3 py-2 border border-slate-200 rounded-lg text-sm">
             <option value="">All classes</option>
             <?php foreach ($classes as $c): ?>
             <option value="<?= (int)$c['id'] ?>" <?= $filterClass === (int)$c['id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['name'] . ($c['section'] ? ' ' . $c['section'] : '')) ?></option>
             <?php endforeach; ?>
         </select>
-        <input type="date" name="date" value="<?= htmlspecialchars($filterDate) ?>" onchange="this.form.submit()" class="px-3 py-2 border border-slate-200 rounded-lg text-sm">
+        <input type="date" name="date" value="<?= htmlspecialchars($filterDate) ?>" class="px-3 py-2 border border-slate-200 rounded-lg text-sm">
+        <button type="submit" class="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">Filter</button>
     </form>
 </div>
 

@@ -40,7 +40,12 @@ $filterWeek  = trim($_GET['week_start'] ?? '');
 
 $plans = [];
 if ($tablesExist) {
-    $sql = "SELECT p.id, p.teacher_id, p.class_id, p.subject_id, p.week_start, p.topic, p.objectives, p.content, p.resources, p.status, p.created_at,
+    $resCol = $conn->query("SHOW COLUMNS FROM lesson_plans LIKE 'file_path'");
+    if ($resCol && $resCol->num_rows === 0) {
+        $conn->query("ALTER TABLE lesson_plans ADD COLUMN file_path VARCHAR(255) NULL AFTER resources");
+    }
+
+    $sql = "SELECT p.id, p.teacher_id, p.class_id, p.subject_id, p.week_start, p.topic, p.objectives, p.content, p.resources, p.status, p.file_path, p.created_at,
                    t.full_name AS teacher_name, c.name AS class_name, c.section AS class_section, s.name AS subject_name
             FROM lesson_plans p
             LEFT JOIN teachers t ON t.id=p.teacher_id AND t.school_id=p.school_id
@@ -124,6 +129,13 @@ if ($tablesExist) {
                     </div>
                     <?php if (!empty($p['objectives'])): ?>
                     <p class="text-xs text-slate-600 mt-2 line-clamp-2"><?= htmlspecialchars($p['objectives']) ?></p>
+                    <?php endif; ?>
+                    <?php if (!empty($p['file_path'])): ?>
+                    <div class="mt-2 text-xs">
+                        <a href="../<?= htmlspecialchars($p['file_path']) ?>" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-indigo-600 rounded-lg hover:bg-slate-50 font-medium">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i> Download Material
+                        </a>
+                    </div>
                     <?php endif; ?>
                 </div>
                 <div class="flex items-center gap-2 shrink-0">

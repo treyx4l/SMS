@@ -309,11 +309,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $notif_body  = mb_substr($body, 0, 80);
         $color = role_color($current_role);
         $target_group = in_array($recipient['role'], ['parent']) ? 'parents_staff' : 'staff';
+        $link = 'chat:user:' . $current_uid;
         $ns = $conn->prepare("
-            INSERT INTO school_notifications (school_id, target_group, type, title, body, actor_name, color)
-            VALUES (?, ?, 'message', ?, ?, ?, ?)
+            INSERT INTO school_notifications (school_id, target_group, type, title, body, actor_name, color, link)
+            VALUES (?, ?, 'message', ?, ?, ?, ?, ?)
         ");
-        $ns->bind_param('isssss', $school_id, $target_group, $notif_title, $notif_body, $current_name, $color);
+        $ns->bind_param('issssss', $school_id, $target_group, $notif_title, $notif_body, $current_name, $color, $link);
         $ns->execute();
         $ns->close();
 

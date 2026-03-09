@@ -139,7 +139,7 @@ foreach ($attendanceByStudent as $a) {
     <form method="get" class="flex flex-wrap gap-3 items-end">
         <div>
             <label class="block text-[11px] font-medium text-slate-600 mb-1">Class</label>
-            <select name="class_id" onchange="this.form.submit()" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
+            <select name="class_id" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
                 <option value="">Select class</option>
                 <?php foreach ($classes as $c): ?>
                 <option value="<?= (int)$c['id'] ?>" <?= $filterClass === (int)$c['id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['name'] . ($c['section'] ? ' ' . $c['section'] : '')) ?></option>
@@ -148,8 +148,9 @@ foreach ($attendanceByStudent as $a) {
         </div>
         <div>
             <label class="block text-[11px] font-medium text-slate-600 mb-1">Date</label>
-            <input type="date" name="date" value="<?= htmlspecialchars($filterDate) ?>" onchange="this.form.submit()" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
+            <input type="date" name="date" value="<?= htmlspecialchars($filterDate) ?>" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
         </div>
+        <button type="submit" class="border border-emerald-600 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-1.5 text-xs font-medium">Filter</button>
     </form>
     <div class="mt-4 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
         <span class="font-medium text-slate-600">Legend:</span>

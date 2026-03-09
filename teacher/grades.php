@@ -184,7 +184,7 @@ if ($tablesExist && $filterClass && $filterSubj) {
     <form method="get" class="flex flex-wrap gap-3 items-end">
         <div>
             <label class="block text-[11px] font-medium text-slate-600 mb-1">Class</label>
-            <select name="class_id" onchange="this.form.submit()" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
+            <select name="class_id" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
                 <option value="">Select class</option>
                 <?php foreach ($classes as $c): ?>
                 <option value="<?= (int)$c['id'] ?>" <?= $filterClass === (int)$c['id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['name'] . ($c['section'] ? ' ' . $c['section'] : '')) ?></option>
@@ -193,7 +193,7 @@ if ($tablesExist && $filterClass && $filterSubj) {
         </div>
         <div>
             <label class="block text-[11px] font-medium text-slate-600 mb-1">Subject</label>
-            <select name="subject_id" onchange="this.form.submit()" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
+            <select name="subject_id" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
                 <option value="">Select subject</option>
                 <?php foreach ($subjects as $s): ?>
                 <option value="<?= (int)$s['id'] ?>" <?= $filterSubj === (int)$s['id'] ? 'selected' : '' ?>><?= htmlspecialchars($s['name']) ?></option>
@@ -202,13 +202,14 @@ if ($tablesExist && $filterClass && $filterSubj) {
         </div>
         <div>
             <label class="block text-[11px] font-medium text-slate-600 mb-1">Exam type</label>
-            <select name="exam_type_id" onchange="this.form.submit()" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
+            <select name="exam_type_id" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
                 <option value="">All exams</option>
                 <?php foreach ($examTypes as $e): ?>
                 <option value="<?= (int)$e['id'] ?>" <?= $filterExam === (int)$e['id'] ? 'selected' : '' ?>><?= htmlspecialchars($e['name']) ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
+        <button type="submit" class="border border-emerald-600 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-1.5 text-xs font-medium">Filter</button>
     </form>
 </div>
 

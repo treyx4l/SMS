@@ -206,6 +206,10 @@ function navLink(string $check, string $current): string {
                         <i data-lucide="bus" class="w-4 h-4 shrink-0"></i>
                         <span>Bus drivers</span>
                     </a>
+                    <a href="bus_routes.php" class="<?= navLink('Manage Bus Routes', $page_title) ?>">
+                        <i data-lucide="map" class="w-4 h-4 shrink-0"></i>
+                        <span>Bus routes</span>
+                    </a>
                     <a href="staff_directory.php" class="<?= navLink('Staff Directory', $page_title) ?>">
                         <i data-lucide="contact" class="w-4 h-4 shrink-0"></i>
                         <span>Staff directory</span>

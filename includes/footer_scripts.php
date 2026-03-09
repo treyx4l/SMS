@@ -122,7 +122,7 @@
                         const tag = n.link ? 'a' : 'button';
                         const href = n.link ? ` href="${n.link}"` : ' type="button"';
                         return `
-                        <${tag}${href} class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left app-notif block" data-notif-id="${n.id}" data-notif-title="${n.title}" data-notif-body="${n.body}">
+                        <${tag}${href} class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left app-notif block" data-notif-id="${n.id}" data-notif-title="${n.title}" data-notif-body="${n.body}" data-notif-link="${n.link}">
                             <span class="mt-1 w-1.5 h-1.5 rounded-full bg-${n.color}-500 shrink-0"></span>
                             <div class="min-w-0 flex-1">
                                 <span class="flex items-center justify-between gap-2 text-[11px] font-medium text-slate-800">
@@ -143,7 +143,7 @@
                         const tag = n.link ? 'a' : 'button';
                         const href = n.link ? ` href="${n.link}"` : ' type="button"';
                         return `
-                        <${tag}${href} class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left app-notif block" data-notif-id="${n.id}" data-notif-title="${n.title}" data-notif-body="${n.body}">
+                        <${tag}${href} class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left app-notif block" data-notif-id="${n.id}" data-notif-title="${n.title}" data-notif-body="${n.body}" data-notif-link="${n.link}">
                             <span class="mt-1 w-1.5 h-1.5 rounded-full bg-${n.color}-500 shrink-0"></span>
                             <div class="min-w-0 flex-1">
                                 <span class="flex items-center justify-between gap-2 text-[11px] font-medium text-slate-800">
@@ -171,6 +171,69 @@
             } else {
                 notifBadge.classList.add('hidden');
             }
+
+            // Bind click events to notification links
+            document.querySelectorAll('#' + prefix + 'NotificationsMenu .app-notif').forEach(btn => {
+                btn.addEventListener('click', e => {
+                    const link = btn.dataset.notifLink;
+                    if (link && link.startsWith('chat:')) {
+                        e.preventDefault();
+                        const parts = link.split(':');
+                        if (parts.length >= 3) {
+                            const type = parts[1]; // 'user' or 'group'
+                            const idOrGroup = parts[2];
+                            
+                            closeAllMenus();
+                            if (chatModal) {
+                                chatModal.classList.remove('hidden');
+                                // Give the modal a moment to display before finding the item
+                                setTimeout(() => {
+                                    // Make sure we have conversations loaded first
+                                    loadConversations();
+                                    
+                                    // Try to open it if we have naming info in the DOM from recent list
+                                    const sidebarBtn = document.querySelector(chatModal ? '#' + chatModal.id + ' .chat-sidebar-item[data-uid="' + idOrGroup + '"]' : null);
+                                    if (sidebarBtn) {
+                                        sidebarBtn.click();
+                                    } else {
+                                        // If not in recent list, we need to fetch user info or group info
+                                        if (type === 'group') {
+                                            const groupName = idOrGroup;
+                                            const title = groupName === 'staff' ? 'Staff & Admin' : 'Parents & Staff';
+                                            const sub = groupName === 'staff' ? 'Group Chat' : 'School Group Chat';
+                                            openThread('group', groupName, title, sub, '<i data-lucide="users" class="w-3.5 h-3.5"></i>');
+                                        } else {
+                                            // Fallback for user: we fetch basic info first to show the header properly
+                                            fetch('../api/user_search.php?id=' + encodeURIComponent(idOrGroup))
+                                                .then(r => r.json())
+                                                .then(data => {
+                                                    if (!data.error && data.users && data.users.length > 0) {
+                                                        const u = data.users[0];
+                                                        openThread('user', u.id, u.full_name, u.role, u.initials);
+                                                    }
+                                                });
+                                        }
+                                    }
+                                }, 100);
+                            }
+                        }
+                    }
+                    
+                    // Mark this specific notification as seen
+                    if (!seen.includes(btn.dataset.notifId)) {
+                        seen.push(btn.dataset.notifId);
+                        localStorage.setItem(seenKey, JSON.stringify(seen));
+                        
+                        // Decrement badge temporarily
+                        let cu = parseInt(notifBadge.textContent) || 0;
+                        if (cu > 1) {
+                            notifBadge.textContent = cu - 1;
+                        } else {
+                            notifBadge.classList.add('hidden');
+                        }
+                    }
+                });
+            });
 
             // Handle browser push notifications for unseen
             if ('Notification' in window && Notification.permission === 'granted') {

@@ -340,7 +340,7 @@ if ($reportType === 'attendance' && $hasAttendance && $filterClassId && $filterS
         <input type="hidden" name="report_type" value="<?= htmlspecialchars($reportType) ?>">
         <div>
             <label class="block text-[11px] font-medium text-slate-600 mb-1">Class</label>
-            <select name="class_id" onchange="this.form.submit()" class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
+            <select name="class_id" class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
                 <option value="">Select class</option>
                 <?php foreach ($classes as $c): ?>
                     <?php $label = $c['name'] . ($c['section'] ? ' ' . $c['section'] : ''); ?>
@@ -352,7 +352,7 @@ if ($reportType === 'attendance' && $hasAttendance && $filterClassId && $filterS
         </div>
         <div>
             <label class="block text-[11px] font-medium text-slate-600 mb-1">Student</label>
-            <select name="student_id" onchange="this.form.submit()" class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
+            <select name="student_id" class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
                 <option value="">Select student</option>
                 <?php foreach ($students as $st): ?>
                     <option value="<?= (int) $st['id'] ?>" <?= $filterStudentId === (int) $st['id'] ? 'selected' : '' ?>>
@@ -364,7 +364,7 @@ if ($reportType === 'attendance' && $hasAttendance && $filterClassId && $filterS
         <?php if ($reportType === 'grades'): ?>
         <div>
             <label class="block text-[11px] font-medium text-slate-600 mb-1">Academic year</label>
-            <select name="year" onchange="this.form.submit()" class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
+            <select name="year" class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
                 <?php if (!$years): ?>
                     <option value="<?= (int) $filterYear ?>"><?= (int) $filterYear ?></option>
                 <?php else: foreach ($years as $y): ?>
@@ -376,7 +376,7 @@ if ($reportType === 'attendance' && $hasAttendance && $filterClassId && $filterS
         </div>
         <div>
             <label class="block text-[11px] font-medium text-slate-600 mb-1">Exam / term</label>
-            <select name="exam_type_id" onchange="this.form.submit()" class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
+            <select name="exam_type_id" class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
                 <option value="">All exams / terms</option>
                 <?php foreach ($examTypes as $e): ?>
                     <option value="<?= (int) $e['id'] ?>" <?= $filterExamTypeId === (int) $e['id'] ? 'selected' : '' ?>>
@@ -397,6 +397,9 @@ if ($reportType === 'attendance' && $hasAttendance && $filterClassId && $filterS
                    class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
         </div>
         <?php endif; ?>
+        <div class="md:col-span-4 flex justify-end">
+            <button type="submit" class="border border-emerald-600 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-1.5 text-xs font-medium">Filter</button>
+        </div>
     </form>
 
     <div class="mt-4 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">

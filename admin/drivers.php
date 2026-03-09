@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email     = trim($_POST['email'] ?? '');
         $phone     = trim($_POST['phone'] ?? '');
         $address   = trim($_POST['address'] ?? '');
+        $route_id  = !empty($_POST['route_id']) ? (int) $_POST['route_id'] : null;
 
         if ($full_name === '') {
             $errors[] = 'Full name is required.';
@@ -65,11 +66,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if (!$errors) {
                 if ($photoPath) {
-                    $stmt = $conn->prepare("UPDATE bus_drivers SET full_name=?, email=?, phone=?, address=?, photo_path=? WHERE id=? AND school_id=?");
-                    $stmt->bind_param('sssssii', $full_name, $email, $phone, $address, $photoPath, $id, $schoolId);
+                    $stmt = $conn->prepare("UPDATE bus_drivers SET full_name=?, email=?, phone=?, address=?, photo_path=?, route_id=? WHERE id=? AND school_id=?");
+                    $stmt->bind_param('sssssiii', $full_name, $email, $phone, $address, $photoPath, $route_id, $id, $schoolId);
                 } else {
-                    $stmt = $conn->prepare("UPDATE bus_drivers SET full_name=?, email=?, phone=?, address=? WHERE id=? AND school_id=?");
-                    $stmt->bind_param('ssssii', $full_name, $email, $phone, $address, $id, $schoolId);
+                    $stmt = $conn->prepare("UPDATE bus_drivers SET full_name=?, email=?, phone=?, address=?, route_id=? WHERE id=? AND school_id=?");
+                    $stmt->bind_param('ssssiii', $full_name, $email, $phone, $address, $route_id, $id, $schoolId);
                 }
                 $stmt->execute();
                 $stmt->close();
@@ -149,10 +150,11 @@ $params[] = $perPage;
 $params[] = $offset;
 $types .= 'ii';
 $stmt = $conn->prepare("
-    SELECT d.id, d.full_name, d.email, d.phone, d.address, d.photo_path, d.created_at,
+    SELECT d.id, d.full_name, d.email, d.phone, d.address, d.photo_path, d.created_at, d.route_id, r.route_name,
            CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END AS has_login
     FROM bus_drivers d
     LEFT JOIN users u ON u.firebase_uid = CONCAT('local:driver:', d.id) AND u.school_id = d.school_id AND u.role = 'driver'
+    LEFT JOIN bus_routes r ON d.route_id = r.id AND r.school_id = d.school_id
     WHERE {$where}
     ORDER BY d.created_at DESC
     LIMIT ? OFFSET ?
@@ -161,6 +163,15 @@ $stmt->bind_param($types, ...$params);
 $stmt->execute();
 $res = $stmt->get_result();
 while ($row = $res->fetch_assoc()) $drivers[] = $row;
+$stmt->close();
+
+// Fetch available routes for the dropdowns
+$routes = [];
+$stmt = $conn->prepare("SELECT id, route_name FROM bus_routes WHERE school_id = ? ORDER BY route_name ASC");
+$stmt->bind_param('i', $schoolId);
+$stmt->execute();
+$res = $stmt->get_result();
+while ($row = $res->fetch_assoc()) $routes[] = $row;
 $stmt->close();
 
 $withLogin = 0;
@@ -245,6 +256,15 @@ $total = $totalRows;
                 <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Address</label>
                 <input type="text" id="new-address" placeholder="123 Street"
                        class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Route</label>
+                <select id="new-route" class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="">None / Unassigned</option>
+                    <?php foreach ($routes as $route): ?>
+                        <option value="<?= $route['id'] ?>"><?= htmlspecialchars($route['route_name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
             <div>
                 <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Login Email *</label>
@@ -335,6 +355,15 @@ $total = $totalRows;
                     <input type="text" name="address" id="editDriverAddress"
                            class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
                 </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Assigned Route</label>
+                    <select name="route_id" id="editDriverRoute" class="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
+                        <option value="">None / Unassigned</option>
+                        <?php foreach ($routes as $route): ?>
+                            <option value="<?= $route['id'] ?>"><?= htmlspecialchars($route['route_name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
             </div>
 
             <div class="flex items-center gap-3">
@@ -371,6 +400,7 @@ $total = $totalRows;
                     <th class="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Driver</th>
                     <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Email</th>
                     <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Phone</th>
+                    <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Route</th>
                     <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Login</th>
                     <th class="text-right px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Actions</th>
                 </tr>
@@ -405,6 +435,9 @@ $total = $totalRows;
                     </td>
                     <td class="px-4 py-3.5 text-slate-500 text-xs"><?= htmlspecialchars($d['email'] ?? '—') ?></td>
                     <td class="px-4 py-3.5 text-slate-500 text-xs"><?= htmlspecialchars($d['phone'] ?? '—') ?></td>
+                    <td class="px-4 py-3.5 text-slate-500 text-xs text-indigo-600 font-medium whitespace-nowrap">
+                        <?= $d['route_name'] ? '<i data-lucide="map" class="inline w-3 h-3 mr-1"></i>' . htmlspecialchars($d['route_name']) : '<span class="text-slate-400 font-normal">Unassigned</span>' ?>
+                    </td>
                     <td class="px-4 py-3.5">
                         <?php if ($d['has_login']): ?>
                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
@@ -425,6 +458,7 @@ $total = $totalRows;
                                    'email' => $d['email'] ?? '',
                                    'phone' => $d['phone'] ?? '',
                                    'address' => $d['address'] ?? '',
+                                   'route_id' => $d['route_id'] ?? '',
                                    'photo_path' => $d['photo_path'] ?? '',
                                ]) ?>)'
                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
@@ -481,6 +515,7 @@ function openEditDriverModal(data) {
     document.getElementById('editDriverEmail').value = data.email || '';
     document.getElementById('editDriverPhone').value = data.phone || '';
     document.getElementById('editDriverAddress').value = data.address || '';
+    document.getElementById('editDriverRoute').value = data.route_id || '';
     const preview = document.getElementById('editDriverPhotoPreview');
     if (data.photo_path && data.photo_path.trim() !== '') {
         preview.innerHTML = '<img src="../' + (data.photo_path || '').replace(/"/g, '&quot;') + '" alt="" class="w-full h-full object-cover">';
@@ -505,6 +540,7 @@ async function createDriver() {
     const email    = document.getElementById('new-email').value.trim();
     const phone    = document.getElementById('new-phone').value.trim();
     const address  = document.getElementById('new-address').value.trim();
+    const route_id = document.getElementById('new-route').value;
     const password = document.getElementById('new-password').value;
     const confirm  = document.getElementById('new-password-confirm').value;
 
@@ -534,7 +570,7 @@ async function createDriver() {
         const resp = await fetch('../api/create_driver.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ full_name: name, email, phone, address, password })
+            body: JSON.stringify({ full_name: name, email, phone, address, route_id, password })
         });
         const data = await resp.json();
 

@@ -50,7 +50,7 @@ $s->close();
 
 // Teachers list summary
 $teachers = [];
-$s = $conn->prepare("SELECT full_name, email, phone, created_at FROM teachers WHERE school_id = ? ORDER BY full_name ASC LIMIT 20");
+$s = $conn->prepare("SELECT full_name, email, phone, created_at FROM teachers WHERE school_id = ? ORDER BY full_name ASC LIMIT 5");
 $s->bind_param('i', $schoolId);
 $s->execute();
 $res = $s->get_result();
@@ -140,6 +140,13 @@ $s->close();
                     <?php endforeach; endif; ?>
                 </tbody>
             </table>
+            <?php if (count($teachers) === 5): ?>
+            <div class="px-5 py-3 border-t border-slate-100 bg-slate-50 text-center">
+                <a href="teachers.php" class="text-[11px] font-medium text-indigo-600 hover:text-indigo-700 hover:underline">
+                    See more teachers &rarr;
+                </a>
+            </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>
@@ -154,18 +161,24 @@ $s->close();
             <h3 class="text-sm font-semibold text-slate-800 mb-1">Export Reports</h3>
             <p class="text-xs text-slate-400 mb-3">Download detailed reports for attendance, fees, grade distributions, and more.</p>
             <div class="flex flex-wrap gap-2">
-                <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-not-allowed opacity-60">
+                <a href="../api/export_report.php?type=attendance" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
                     <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Attendance Report
-                </button>
-                <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-not-allowed opacity-60">
+                </a>
+                <a href="../api/export_report.php?type=grades" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
                     <i data-lucide="clipboard-list" class="w-3.5 h-3.5"></i> Grade Report
-                </button>
-                <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-not-allowed opacity-60">
+                </a>
+                <a href="../api/export_report.php?type=fees" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
                     <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> Fee Status
-                </button>
-                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-50 border border-yellow-200 text-[11px] text-yellow-600">
-                    <i data-lucide="clock" class="w-3 h-3"></i> Coming soon
-                </span>
+                </a>
+                <a href="../api/export_report.php?type=students" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
+                    <i data-lucide="users" class="w-3.5 h-3.5"></i> Student Roster
+                </a>
+                <a href="../api/export_report.php?type=teachers" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
+                    <i data-lucide="user-check" class="w-3.5 h-3.5"></i> Staff Directory
+                </a>
+                <a href="../api/export_report.php?type=lesson_plans" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
+                    <i data-lucide="book-open" class="w-3.5 h-3.5"></i> Lesson Plans
+                </a>
             </div>
         </div>
     </div>

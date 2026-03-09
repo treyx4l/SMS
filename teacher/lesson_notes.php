@@ -21,6 +21,13 @@ $tablesExist = false;
 $res = $conn->query("SHOW TABLES LIKE 'lesson_plans'");
 $tablesExist = $res && $res->num_rows > 0;
 
+if ($tablesExist) {
+    $resCol = $conn->query("SHOW COLUMNS FROM lesson_plans LIKE 'file_path'");
+    if ($resCol && $resCol->num_rows === 0) {
+        $conn->query("ALTER TABLE lesson_plans ADD COLUMN file_path VARCHAR(255) NULL AFTER resources");
+    }
+}
+
 $teacherClassesSubjects = [];
 if ($teacherId) {
     $stmt = $conn->prepare("SELECT DISTINCT class_id, subject_id FROM timetable_entries WHERE school_id=? AND teacher_id=?");
@@ -130,20 +137,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $teacherId && $tablesExist) {
             $content = trim($_POST['content'] ?? '');
             $resources = trim($_POST['resources'] ?? '');
 
-            $stmt = $conn->prepare("INSERT INTO lesson_plans (school_id, teacher_id, class_id, subject_id, week_start, topic, objectives, content, resources, status)
-                VALUES (?,?,?,?,?,?,?,?,?,?)
-                ON DUPLICATE KEY UPDATE topic=VALUES(topic), objectives=VALUES(objectives), content=VALUES(content), resources=VALUES(resources), status=VALUES(status)");
-            $stmt->bind_param('iiiissssss', $schoolId, $teacherId, $classId, $subjectId, $weekStart, $topic, $objectives, $content, $resources, $status);
-            $stmt->execute();
-            $stmt->close();
-            $success = 'Lesson plan saved.';
-            $editPlan = [
-                'topic' => $topic,
-                'objectives' => $objectives,
-                'content' => $content,
-                'resources' => $resources,
-                'status' => $status,
-            ] + ($editPlan ?? []);
+            // Get old file path to replace if needed
+            $oldFilePath = null;
+            $stmtOld = $conn->prepare("SELECT file_path FROM lesson_plans WHERE school_id=? AND teacher_id=? AND class_id=? AND subject_id=? AND week_start=?");
+            $stmtOld->bind_param('iiiis', $schoolId, $teacherId, $classId, $subjectId, $weekStart);
+            $stmtOld->execute();
+            $rowOld = $stmtOld->get_result()->fetch_assoc();
+            $stmtOld->close();
+            if ($rowOld) {
+                $oldFilePath = $rowOld['file_path'];
+            }
+            $filePath = $oldFilePath;
+
+            if (!empty($_FILES['lesson_note']['name']) && $_FILES['lesson_note']['error'] === UPLOAD_ERR_OK) {
+                if ($_FILES['lesson_note']['size'] > 3 * 1024 * 1024) {
+                    $errors[] = 'Lesson note file cannot exceed 3MB.';
+                } else {
+                    $uploadDir = dirname(__DIR__) . '/storage/lesson_notes/';
+                    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                    $ext = strtolower(pathinfo($_FILES['lesson_note']['name'], PATHINFO_EXTENSION));
+                    $allowedExts = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'txt', 'xls', 'xlsx'];
+                    if (in_array($ext, $allowedExts)) {
+                        $filename = 'note_' . $schoolId . '_' . $teacherId . '_' . $classId . '_' . $subjectId . '_' . uniqid() . '.' . $ext;
+                        if (move_uploaded_file($_FILES['lesson_note']['tmp_name'], $uploadDir . $filename)) {
+                            $filePath = 'storage/lesson_notes/' . $filename;
+                            
+                            // Delete old file if exists and different
+                            if ($oldFilePath && file_exists(dirname(__DIR__) . '/' . $oldFilePath)) {
+                                unlink(dirname(__DIR__) . '/' . $oldFilePath);
+                            }
+                        } else {
+                            $errors[] = 'Failed to save uploaded lesson note.';
+                        }
+                    } else {
+                        $errors[] = 'Invalid file format. Only PDF, Word, Excel, PowerPoint, and TXT are allowed.';
+                    }
+                }
+            }
+
+            if (!$errors) {
+                $stmt = $conn->prepare("INSERT INTO lesson_plans (school_id, teacher_id, class_id, subject_id, week_start, topic, objectives, content, resources, status, file_path)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                    ON DUPLICATE KEY UPDATE topic=VALUES(topic), objectives=VALUES(objectives), content=VALUES(content), resources=VALUES(resources), status=VALUES(status), file_path=VALUES(file_path)");
+                $stmt->bind_param('iiiisssssss', $schoolId, $teacherId, $classId, $subjectId, $weekStart, $topic, $objectives, $content, $resources, $status, $filePath);
+                $stmt->execute();
+                $stmt->close();
+                $success = 'Lesson plan saved.';
+                $editPlan = [
+                    'topic' => $topic,
+                    'objectives' => $objectives,
+                    'content' => $content,
+                    'resources' => $resources,
+                    'status' => $status,
+                    'file_path' => $filePath,
+                ] + ($editPlan ?? []);
+            }
         }
     }
 }
@@ -171,7 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $teacherId && $tablesExist) {
     <form method="get" class="flex flex-wrap gap-3 items-end">
         <div>
             <label class="block text-[11px] font-medium text-slate-600 mb-1">Class</label>
-            <select name="class_id" onchange="this.form.submit()" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
+            <select name="class_id" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
                 <option value="">Select class</option>
                 <?php foreach ($classes as $c): ?>
                 <option value="<?= (int)$c['id'] ?>" <?= $filterClass === (int)$c['id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['name'] . ($c['section'] ? ' ' . $c['section'] : '')) ?></option>
@@ -180,7 +228,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $teacherId && $tablesExist) {
         </div>
         <div>
             <label class="block text-[11px] font-medium text-slate-600 mb-1">Subject</label>
-            <select name="subject_id" onchange="this.form.submit()" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
+            <select name="subject_id" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
                 <option value="">Select subject</option>
                 <?php foreach ($subjects as $s): ?>
                 <option value="<?= (int)$s['id'] ?>" <?= $filterSubj === (int)$s['id'] ? 'selected' : '' ?>><?= htmlspecialchars($s['name']) ?></option>
@@ -189,19 +237,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $teacherId && $tablesExist) {
         </div>
         <div>
             <label class="block text-[11px] font-medium text-slate-600 mb-1">Week (Monday)</label>
-            <select name="week_start" onchange="this.form.submit()" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
+            <select name="week_start" class="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
                 <?php foreach ($weeks as $w): ?>
                 <option value="<?= htmlspecialchars($w) ?>" <?= $filterWeek === $w ? 'selected' : '' ?>><?= date('d M Y', strtotime($w)) ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
+        <button type="submit" class="border border-emerald-600 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-1.5 text-xs font-medium">Filter</button>
     </form>
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
     <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 flex flex-col">
         <?php if ($filterClass && $filterSubj): ?>
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
             <input type="hidden" name="action" value="save_plan">
             <input type="hidden" name="class_id" value="<?= $filterClass ?>">
             <input type="hidden" name="subject_id" value="<?= $filterSubj ?>">
@@ -241,6 +290,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $teacherId && $tablesExist) {
                     <label class="block text-[11px] font-medium text-slate-600 mb-1">Resources / materials</label>
                     <textarea name="resources" rows="2" placeholder="e.g. Number line chart, marker, projector..."
                               class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-700"><?= htmlspecialchars($editPlan['resources'] ?? '') ?></textarea>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-medium text-slate-600 mb-1">Upload Lesson Note Document (Max: 3MB)</label>
+                    <?php if (!empty($editPlan['file_path'])): ?>
+                    <div class="mb-2 text-xs flex items-center gap-2">
+                        <i data-lucide="file-check" class="w-4 h-4 text-emerald-600"></i>
+                        <a href="../<?= htmlspecialchars($editPlan['file_path']) ?>" target="_blank" class="text-emerald-600 hover:underline">View Current Document</a>
+                    </div>
+                    <?php endif; ?>
+                    <input type="file" name="lesson_note" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.xls,.xlsx"
+                           class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-[11px] file:font-medium hover:file:bg-indigo-100">
                 </div>
             </div>
         </form>

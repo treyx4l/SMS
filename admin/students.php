@@ -35,6 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $phone        = trim($_POST['phone'] ?? '');
         $address      = trim($_POST['address'] ?? '');
         $nationality  = trim($_POST['nationality'] ?? '');
+        $route_id     = !empty($_POST['route_id']) ? (int) $_POST['route_id'] : null;
         $fingerprint  = trim($_POST['fingerprint_data'] ?? '');
 
         if ($first_name === '' || $last_name === '' || $index_no === '') {
@@ -104,6 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($hasIndexNo && $photoPath) {
                     $setParts[] = "photo_path=?";
                 }
+                $setParts[] = "route_id=?";
                 $set = implode(', ', $setParts) . " WHERE id=? AND school_id=?";
 
                 $stmt = $conn->prepare("UPDATE students SET {$set}");
@@ -134,6 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($hasIndexNo && $photoPath) {
                     $params[] = $photoPath;
                 }
+                $params[] = $route_id;
                 $params[] = $id;
                 $params[] = $schoolId;
 
@@ -155,6 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($hasIndexNo && $photoPath) {
                     $types .= 's';        // photo_path
                 }
+                $types .= 'i';            // route_id
                 $types .= 'ii';           // id, school_id
 
                 $stmt->bind_param($types, ...$params);
@@ -177,14 +181,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($errors) { /* skip insert */ } else {
                 // Insert
                 $cols = $hasIndexNo
-                    ? "school_id, first_name, last_name, gender, index_no, class_id, phone, address"
-                    : "school_id, first_name, last_name, gender, admission_no, class_id, phone, address";
+                    ? "school_id, first_name, last_name, gender, index_no, class_id, phone, address, route_id"
+                    : "school_id, first_name, last_name, gender, admission_no, class_id, phone, address, route_id";
                 if ($hasNationality) $cols .= ", nationality";
                 if ($hasIndexNo) $cols .= ", fingerprint_data";
                 if ($hasAdmissionNo && $hasIndexNo) $cols .= ", admission_no";
                 if ($hasIndexNo && $photoPath) $cols .= ", photo_path";
 
-                $phs = $hasIndexNo ? "?, ?, ?, ?, ?, ?, ?, ?" : "?, ?, ?, ?, ?, ?, ?, ?";
+                $phs = $hasIndexNo ? "?, ?, ?, ?, ?, ?, ?, ?, ?" : "?, ?, ?, ?, ?, ?, ?, ?, ?";
                 if ($hasNationality) $phs .= ", ?";
                 if ($hasIndexNo) $phs .= ", ?";
                 if ($hasAdmissionNo && $hasIndexNo) $phs .= ", ?";
@@ -192,13 +196,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $stmt = $conn->prepare("INSERT INTO students ({$cols}) VALUES ({$phs})");
 
-                $params = [$schoolId, $first_name, $last_name, $gender, $hasIndexNo ? $index_no : $admission_no, $class_id, $phone, $address];
+                $params = [$schoolId, $first_name, $last_name, $gender, $hasIndexNo ? $index_no : $admission_no, $class_id, $phone, $address, $route_id];
                 if ($hasNationality) $params[] = $nationality;
                 if ($hasIndexNo) $params[] = $fingerprint ?: null;
                 if ($hasAdmissionNo && $hasIndexNo) $params[] = $index_no;
                 if ($hasIndexNo && $photoPath) $params[] = $photoPath;
 
-                $types = 'isssss' . 'i' . 's'; // school_id, first,last,gender,id/admission, class_id, phone, address
+                $types = 'isssss' . 'i' . 's' . 'i'; // school_id, first,last,gender,id/admission, class_id, phone, address, route_id
                 if ($hasNationality) $types .= 's';
                 if ($hasIndexNo) $types .= 's'; // fingerprint
                 if ($hasAdmissionNo && $hasIndexNo) $types .= 's'; // admission copy
@@ -230,6 +234,15 @@ $stmt->bind_param('i', $schoolId);
 $stmt->execute();
 $res = $stmt->get_result();
 while ($row = $res->fetch_assoc()) $classes[] = $row;
+$stmt->close();
+
+// Fetch available routes for the dropdowns
+$routes = [];
+$stmt = $conn->prepare("SELECT id, route_name FROM bus_routes WHERE school_id = ? ORDER BY route_name ASC");
+$stmt->bind_param('i', $schoolId);
+$stmt->execute();
+$res = $stmt->get_result();
+while ($row = $res->fetch_assoc()) $routes[] = $row;
 $stmt->close();
 
 // Search (server-side, overrides pagination content)
@@ -275,10 +288,11 @@ if ($searchParam !== null) {
 $params[] = $perPage;
 $params[] = $offset;
 $types .= 'ii';
-$sql = "SELECT s.id, s.first_name, s.last_name, s.gender, {$idColSel}, s.phone{$extraCols},
+$sql = "SELECT s.id, s.first_name, s.last_name, s.gender, {$idColSel}, s.phone{$extraCols}, s.route_id, r.route_name,
          c.name AS class_name, c.section
          FROM students s
          LEFT JOIN classes c ON c.id = s.class_id
+         LEFT JOIN bus_routes r ON s.route_id = r.id AND r.school_id = s.school_id
          WHERE {$where}
          ORDER BY s.created_at DESC
          LIMIT ? OFFSET ?";
@@ -346,6 +360,7 @@ $stmt->close();
                     <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Index No</th>
                     <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Gender</th>
                     <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Class</th>
+                    <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Bus Route</th>
                     <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Address</th>
                     <th class="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Phone</th>
                     <th class="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Actions</th>
@@ -373,6 +388,9 @@ $stmt->close();
                     <td class="px-4 py-3 text-slate-600"><?= htmlspecialchars($s['index_no']) ?></td>
                     <td class="px-4 py-3 text-slate-500"><?= htmlspecialchars($s['gender'] ?? '-') ?></td>
                     <td class="px-4 py-3 text-slate-500"><?= htmlspecialchars($s['class_name'] ? $s['class_name'] . ($s['section'] ? ' ' . $s['section'] : '') : 'Unassigned') ?></td>
+                    <td class="px-4 py-3 text-slate-500 text-xs">
+                        <?= $s['route_name'] ? '<i data-lucide="map" class="inline w-3 h-3 mr-1 text-indigo-600"></i>' . htmlspecialchars($s['route_name']) : '<span class="text-slate-400">—</span>' ?>
+                    </td>
                     <td class="px-4 py-3 text-slate-500 text-xs"><?= htmlspecialchars($s['address'] ?? '-') ?></td>
                     <td class="px-4 py-3 text-slate-500"><?= htmlspecialchars($s['phone'] ?? '-') ?></td>
                     <td class="px-4 py-3 text-right">
@@ -428,6 +446,11 @@ $classesOptions = '';
 foreach ($classes as $c) {
     $val = htmlspecialchars($c['name'] . ($c['section'] ? ' - ' . $c['section'] : ''));
     $classesOptions .= "<option value=\"{$c['id']}\">{$val}</option>";
+}
+$routesOptions = '';
+foreach ($routes as $r) {
+    $val = htmlspecialchars($r['route_name']);
+    $routesOptions .= "<option value=\"{$r['id']}\">{$val}</option>";
 }
 ?>
 
@@ -495,9 +518,19 @@ foreach ($classes as $c) {
                         </select>
                     </div>
                 </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Phone</label>
-                    <input type="text" name="phone" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                <!-- Route Dropdown Row -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Phone</label>
+                        <input type="text" name="phone" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Bus Route</label>
+                        <select name="route_id" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                            <option value="">— Unassigned —</option>
+                            <?= $routesOptions ?>
+                        </select>
+                    </div>
                 </div>
                 <div class="flex justify-end gap-2 pt-4">
                     <button type="button" onclick="closeModal('addModal')" class="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
@@ -592,9 +625,18 @@ foreach ($classes as $c) {
                         </select>
                     </div>
                 </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Phone</label>
-                    <input type="text" name="phone" id="editPhone" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Phone</label>
+                        <input type="text" name="phone" id="editPhone" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Bus Route</label>
+                        <select name="route_id" id="editRouteId" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                            <option value="">— Unassigned —</option>
+                            <?= $routesOptions ?>
+                        </select>
+                    </div>
                 </div>
                 <div class="flex justify-end gap-2 pt-4">
                     <button type="button" onclick="closeModal('editModal')" class="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
@@ -643,6 +685,7 @@ function viewStudent(s) {
             <div>
                 <div class="text-lg font-semibold text-slate-800">${s.first_name} ${s.last_name}</div>
                 <div class="text-sm text-slate-500">Index No: ${s.index_no}</div>
+                ${s.route_name ? `<div class="mt-1 flex items-center gap-1 text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md w-fit"><i data-lucide="map" class="w-3 h-3"></i> ${s.route_name}</div>` : ''}
             </div>
         </div>
         <div class="space-y-2 text-sm">
@@ -669,6 +712,7 @@ function editStudent(s) {
     document.getElementById('editGender').value = s.gender || '';
     document.getElementById('editClassId').value = s.class_id || '';
     document.getElementById('editPhone').value = s.phone || '';
+    document.getElementById('editRouteId').value = s.route_id || '';
 
     const preview = document.getElementById('editPhotoPreview');
     if (s.photo_path) {

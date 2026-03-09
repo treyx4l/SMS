@@ -15,6 +15,7 @@ $fullName = trim($data['full_name'] ?? '');
 $email    = trim($data['email'] ?? '');
 $phone    = trim($data['phone'] ?? '');
 $address  = trim($data['address'] ?? '');
+$route_id = !empty($data['route_id']) ? (int) $data['route_id'] : null;
 $password = $data['password'] ?? '';
 $schoolId = (int) ($_SESSION['school_id'] ?? 0);
 
@@ -51,10 +52,10 @@ $passwordHash = password_hash($password, PASSWORD_DEFAULT);
 $conn->begin_transaction();
 try {
     $stmt = $conn->prepare(
-        "INSERT INTO bus_drivers (school_id, full_name, email, phone, address, password_hash)
-         VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO bus_drivers (school_id, full_name, email, phone, address, route_id, password_hash)
+         VALUES (?, ?, ?, ?, ?, ?, ?)"
     );
-    $stmt->bind_param('isssss', $schoolId, $fullName, $email, $phone, $address, $passwordHash);
+    $stmt->bind_param('issssis', $schoolId, $fullName, $email, $phone, $address, $route_id, $passwordHash);
     $stmt->execute();
     $driverId = (int) $stmt->insert_id;
     $stmt->close();

@@ -31,19 +31,31 @@ if (strlen($q) < 1) {
 
 $conn = get_db_connection();
 
-// Search users in the same school, exclude the current user
-$stmt = $conn->prepare(
-    "SELECT id, full_name, role
-     FROM users
-     WHERE school_id = ?
-       AND id != ?
-       AND full_name LIKE ?
-     ORDER BY full_name
-     LIMIT 15"
-);
+$stmt = null;
+if (isset($_GET['id'])) {
+    $id_search = (int)$_GET['id'];
+    $stmt = $conn->prepare(
+        "SELECT id, full_name, role
+         FROM users
+         WHERE school_id = ?
+           AND id = ?"
+    );
+    $stmt->bind_param('ii', $school_id, $id_search);
+} else {
+    // Search users in the same school, exclude the current user
+    $stmt = $conn->prepare(
+        "SELECT id, full_name, role
+         FROM users
+         WHERE school_id = ?
+           AND id != ?
+           AND full_name LIKE ?
+         ORDER BY full_name
+         LIMIT 15"
+    );
+    $like = '%' . $q . '%';
+    $stmt->bind_param('iis', $school_id, $current_uid, $like);
+}
 
-$like = '%' . $q . '%';
-$stmt->bind_param('iis', $school_id, $current_uid, $like);
 $stmt->execute();
 $res = $stmt->get_result();
 
