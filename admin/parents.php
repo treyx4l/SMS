@@ -37,51 +37,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Photo upload
             $photoPath = null;
+            $oldPhotoPath = null;
             $res = $conn->query("SHOW COLUMNS FROM parents LIKE 'photo_path'");
-            if ($res && $res->num_rows > 0 && !empty($_FILES['photo']['name']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
-                $uploadDir = dirname(__DIR__) . '/storage/staff/';
-                if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
-                if (in_array($ext, ['jpg','jpeg','png','gif','webp'])) {
-                    $filename = 'parent_' . $id . '_' . uniqid() . '.' . $ext;
-                    if (move_uploaded_file($_FILES['photo']['tmp_name'], $uploadDir . $filename)) {
-                        $photoPath = 'storage/staff/' . $filename;
+            if ($res && $res->num_rows > 0) {
+                $stmtOld = $conn->prepare("SELECT photo_path FROM parents WHERE id=? AND school_id=?");
+                $stmtOld->bind_param('ii', $id, $schoolId);
+                $stmtOld->execute();
+                $rowOld = $stmtOld->get_result()->fetch_assoc();
+                $stmtOld->close();
+                $oldPhotoPath = $rowOld['photo_path'] ?? null;
+
+                if (!empty($_FILES['photo']['name']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+                    if ($_FILES['photo']['size'] > 2 * 1024 * 1024) {
+                        $errors[] = 'Photo size cannot exceed 2MB.';
+                    } else {
+                        $uploadDir = dirname(__DIR__) . '/storage/staff/';
+                        if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                        $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
+                        if (in_array($ext, ['jpg','jpeg','png','gif','webp'])) {
+                            $filename = 'parent_' . $id . '_' . uniqid() . '.' . $ext;
+                            if (move_uploaded_file($_FILES['photo']['tmp_name'], $uploadDir . $filename)) {
+                                $photoPath = 'storage/staff/' . $filename;
+                            } else {
+                                $errors[] = 'Failed to save uploaded photo.';
+                            }
+                        } else {
+                            $errors[] = 'Invalid photo format. Only JPG, PNG, GIF, and WebP are allowed.';
+                        }
                     }
                 }
             }
-            if ($photoPath) {
-                $stmt = $conn->prepare("UPDATE parents SET full_name=?, email=?, phone=?, address=?, photo_path=? WHERE id=? AND school_id=?");
-                $stmt->bind_param('sssssii', $full_name, $email, $phone, $address, $photoPath, $id, $schoolId);
-            } else {
-                $stmt = $conn->prepare("UPDATE parents SET full_name=?, email=?, phone=?, address=? WHERE id=? AND school_id=?");
-                $stmt->bind_param('ssssii', $full_name, $email, $phone, $address, $id, $schoolId);
-            }
-            $stmt->execute();
-            $stmt->close();
 
-            // Update users table (parents use local MySQL auth)
-            $localUid = 'local:parent:' . $id;
-            $stmt = $conn->prepare("UPDATE users SET full_name=?, email=? WHERE firebase_uid=? AND school_id=? AND role='parent'");
-            $stmt->bind_param('sssi', $full_name, $email, $localUid, $schoolId);
-            $stmt->execute();
-            $stmt->close();
-
-            // Update ward assignments: clear then set
-            $stmt = $conn->prepare("UPDATE students SET parent_id=NULL WHERE parent_id=? AND school_id=?");
-            $stmt->bind_param('ii', $id, $schoolId);
-            $stmt->execute();
-            $stmt->close();
-
-            foreach ($ward_ids as $sid) {
-                if ($sid > 0) {
-                    $stmt = $conn->prepare("UPDATE students SET parent_id=? WHERE id=? AND school_id=?");
-                    $stmt->bind_param('iii', $id, $sid, $schoolId);
-                    $stmt->execute();
-                    $stmt->close();
+            if (!$errors) {
+                if ($photoPath) {
+                    $stmt = $conn->prepare("UPDATE parents SET full_name=?, email=?, phone=?, address=?, photo_path=? WHERE id=? AND school_id=?");
+                    $stmt->bind_param('sssssii', $full_name, $email, $phone, $address, $photoPath, $id, $schoolId);
+                } else {
+                    $stmt = $conn->prepare("UPDATE parents SET full_name=?, email=?, phone=?, address=? WHERE id=? AND school_id=?");
+                    $stmt->bind_param('ssssii', $full_name, $email, $phone, $address, $id, $schoolId);
                 }
-            }
+                $stmt->execute();
+                $stmt->close();
+                
+                if ($photoPath && $oldPhotoPath && file_exists(dirname(__DIR__) . '/' . $oldPhotoPath)) {
+                    unlink(dirname(__DIR__) . '/' . $oldPhotoPath);
+                }
 
-            $success = 'Parent updated successfully.';
+                // Update users table (parents use local MySQL auth)
+                $localUid = 'local:parent:' . $id;
+                $stmt = $conn->prepare("UPDATE users SET full_name=?, email=? WHERE firebase_uid=? AND school_id=? AND role='parent'");
+                $stmt->bind_param('sssi', $full_name, $email, $localUid, $schoolId);
+                $stmt->execute();
+                $stmt->close();
+
+                // Update ward assignments: clear then set
+                $stmt = $conn->prepare("UPDATE students SET parent_id=NULL WHERE parent_id=? AND school_id=?");
+                $stmt->bind_param('ii', $id, $schoolId);
+                $stmt->execute();
+                $stmt->close();
+
+                foreach ($ward_ids as $sid) {
+                    if ($sid > 0) {
+                        $stmt = $conn->prepare("UPDATE students SET parent_id=? WHERE id=? AND school_id=?");
+                        $stmt->bind_param('iii', $id, $sid, $schoolId);
+                        $stmt->execute();
+                        $stmt->close();
+                    }
+                }
+
+                $success = 'Parent updated successfully.';
+            }
         }
     } elseif ($action === 'delete') {
         $id = (int) ($_POST['id'] ?? 0);
@@ -120,7 +145,7 @@ $searchQ = trim($_GET['q'] ?? '');
 $searchParam = $searchQ !== '' ? '%' . $searchQ . '%' : null;
 
 // Pagination
-$perPage   = 15;
+$perPage   = 10;
 $page      = max(1, (int) ($_GET['page'] ?? 1));
 if ($searchParam !== null) {
     $stmt = $conn->prepare("SELECT COUNT(*) FROM parents p WHERE p.school_id = ? AND (p.full_name LIKE ? OR p.email LIKE ? OR p.phone LIKE ?)");

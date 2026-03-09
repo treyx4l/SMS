@@ -42,23 +42,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if (!$errors) {
+            // Fetch old photo path for replacement if we are updating
+            $oldPhotoPath = null;
+            if ($id && $hasIndexNo) {
+                $stmtOld = $conn->prepare("SELECT photo_path FROM students WHERE id=? AND school_id=?");
+                $stmtOld->bind_param('ii', $id, $schoolId);
+                $stmtOld->execute();
+                $rowOld = $stmtOld->get_result()->fetch_assoc();
+                $stmtOld->close();
+                $oldPhotoPath = $rowOld['photo_path'] ?? null;
+            }
+
             // Handle photo upload (only when schema has photo_path)
             $photoPath = null;
             if ($hasIndexNo && !empty($_FILES['photo']['name']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
-                $uploadDir = dirname(__DIR__) . '/storage/students/';
-                if (!is_dir($uploadDir)) {
-                    mkdir($uploadDir, 0755, true);
-                }
-                $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
-                if (in_array($ext, ['jpg','jpeg','png','gif','webp'])) {
-                    $filename = uniqid('st_') . '.' . $ext;
-                    if (move_uploaded_file($_FILES['photo']['tmp_name'], $uploadDir . $filename)) {
-                        $photoPath = 'storage/students/' . $filename;
+                if ($_FILES['photo']['size'] > 2 * 1024 * 1024) {
+                    $errors[] = 'Photo size cannot exceed 2MB.';
+                } else {
+                    $uploadDir = dirname(__DIR__) . '/storage/students/';
+                    if (!is_dir($uploadDir)) {
+                        mkdir($uploadDir, 0755, true);
+                    }
+                    $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
+                    if (in_array($ext, ['jpg','jpeg','png','gif','webp'])) {
+                        $filename = uniqid('st_') . '.' . $ext;
+                        if (move_uploaded_file($_FILES['photo']['tmp_name'], $uploadDir . $filename)) {
+                            $photoPath = 'storage/students/' . $filename;
+                        } else {
+                            $errors[] = 'Failed to save uploaded photo.';
+                        }
+                    } else {
+                        $errors[] = 'Invalid photo format. Only JPG, PNG, GIF, and WebP are allowed.';
                     }
                 }
             }
 
-            if ($id) {
+            if (!$errors && $id) {
                 // Update
                 $setParts = [
                     "first_name=?",
@@ -141,8 +160,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->bind_param($types, ...$params);
                 $stmt->execute();
                 $stmt->close();
+                if ($photoPath && $oldPhotoPath && file_exists(dirname(__DIR__) . '/' . $oldPhotoPath)) {
+                    unlink(dirname(__DIR__) . '/' . $oldPhotoPath);
+                }
                 $success = 'Student updated successfully.';
-            } else {
+            } elseif (!$errors) {
                 // Cap: max students per school
                 $capStmt = $conn->prepare("SELECT COUNT(*) FROM students WHERE school_id = ?");
                 $capStmt->bind_param('i', $schoolId);

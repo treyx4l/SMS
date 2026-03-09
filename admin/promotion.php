@@ -115,6 +115,20 @@ if ($promoteFromClass) {
     </div>
 </div>
 
+<!-- Promotion Warning Dialog -->
+<div id="promoDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm transition-opacity">
+    <div class="bg-white rounded-xl shadow-2xl border border-slate-200 p-6 max-w-sm w-full text-center mx-4 transform transition-all">
+        <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="alert-triangle" class="w-6 h-6 text-indigo-600"></i>
+        </div>
+        <h3 class="text-lg font-extrabold text-slate-800 mb-2">Promote Higher Classes First</h3>
+        <p class="text-sm text-slate-500 mb-6 font-medium">Please ensure you promote students in the highest classes before lower classes to avoid data overlaps.</p>
+        <button type="button" onclick="document.getElementById('promoDialog').remove()" class="w-full px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
+            I Understand
+        </button>
+    </div>
+</div>
+
 <?php if ($errors): ?>
 <div class="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
     <?= htmlspecialchars(implode(' ', $errors)) ?>

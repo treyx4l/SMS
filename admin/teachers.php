@@ -43,71 +43,96 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Photo upload
             $photoPath = null;
+            $oldPhotoPath = null;
             $res = $conn->query("SHOW COLUMNS FROM teachers LIKE 'photo_path'");
-            if ($res && $res->num_rows > 0 && !empty($_FILES['photo']['name']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
-                $uploadDir = dirname(__DIR__) . '/storage/staff/';
-                if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
-                if (in_array($ext, ['jpg','jpeg','png','gif','webp'])) {
-                    $filename = 'teacher_' . $id . '_' . uniqid() . '.' . $ext;
-                    if (move_uploaded_file($_FILES['photo']['tmp_name'], $uploadDir . $filename)) {
-                        $photoPath = 'storage/staff/' . $filename;
-                    }
-                }
-            }
-            $res = $conn->query("SHOW COLUMNS FROM teachers LIKE 'password_hash'");
-            $hasPasswordCol = $res && $res->num_rows > 0;
-            $passwordHash = null;
-            if ($hasPasswordCol && $new_password !== '') {
-                $passwordHash = password_hash($new_password, PASSWORD_DEFAULT);
-            }
+            if ($res && $res->num_rows > 0) {
+                $stmtOld = $conn->prepare("SELECT photo_path FROM teachers WHERE id=? AND school_id=?");
+                $stmtOld->bind_param('ii', $id, $schoolId);
+                $stmtOld->execute();
+                $rowOld = $stmtOld->get_result()->fetch_assoc();
+                $stmtOld->close();
+                $oldPhotoPath = $rowOld['photo_path'] ?? null;
 
-            if ($photoPath && $passwordHash !== null) {
-                $stmt = $conn->prepare("UPDATE teachers SET full_name=?, email=?, phone=?, photo_path=?, password_hash=? WHERE id=? AND school_id=?");
-                $stmt->bind_param('sssssii', $full_name, $email, $phone, $photoPath, $passwordHash, $id, $schoolId);
-            } elseif ($photoPath) {
-                $stmt = $conn->prepare("UPDATE teachers SET full_name=?, email=?, phone=?, photo_path=? WHERE id=? AND school_id=?");
-                $stmt->bind_param('ssssii', $full_name, $email, $phone, $photoPath, $id, $schoolId);
-            } elseif ($passwordHash !== null) {
-                $stmt = $conn->prepare("UPDATE teachers SET full_name=?, email=?, phone=?, password_hash=? WHERE id=? AND school_id=?");
-                $stmt->bind_param('ssssii', $full_name, $email, $phone, $passwordHash, $id, $schoolId);
-            } else {
-                $stmt = $conn->prepare("UPDATE teachers SET full_name=?, email=?, phone=? WHERE id=? AND school_id=?");
-                $stmt->bind_param('sssii', $full_name, $email, $phone, $id, $schoolId);
-            }
-            $stmt->execute();
-            $stmt->close();
-
-            // Update users table (teachers use local MySQL auth)
-            $stmt = $conn->prepare("UPDATE users SET full_name=?, email=? WHERE firebase_uid=? AND school_id=? AND role='teacher'");
-            $stmt->bind_param('sssi', $full_name, $email, $localUid, $schoolId);
-            $stmt->execute();
-            $stmt->close();
-
-            // Update teacher_class_subjects if table exists
-            $tcsExists = (bool) ($conn->query("SHOW TABLES LIKE 'teacher_class_subjects'")->num_rows ?? 0);
-            if ($tcsExists) {
-                $class_ids   = isset($_POST['class_ids']) && is_array($_POST['class_ids'])
-                    ? array_map('intval', array_filter($_POST['class_ids'])) : [];
-                $subject_ids = isset($_POST['subject_ids']) && is_array($_POST['subject_ids'])
-                    ? array_map('intval', array_filter($_POST['subject_ids'])) : [];
-                $stmt = $conn->prepare("DELETE FROM teacher_class_subjects WHERE teacher_id=? AND school_id=?");
-                $stmt->bind_param('ii', $id, $schoolId);
-                $stmt->execute();
-                $stmt->close();
-                foreach ($class_ids as $cid) {
-                    foreach ($subject_ids as $sid) {
-                        if ($cid > 0 && $sid > 0) {
-                            $stmt = $conn->prepare("INSERT IGNORE INTO teacher_class_subjects (school_id, teacher_id, class_id, subject_id) VALUES (?, ?, ?, ?)");
-                            $stmt->bind_param('iiii', $schoolId, $id, $cid, $sid);
-                            $stmt->execute();
-                            $stmt->close();
+                if (!empty($_FILES['photo']['name']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+                    if ($_FILES['photo']['size'] > 2 * 1024 * 1024) {
+                        $errors[] = 'Photo size cannot exceed 2MB.';
+                    } else {
+                        $uploadDir = dirname(__DIR__) . '/storage/staff/';
+                        if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                        $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
+                        if (in_array($ext, ['jpg','jpeg','png','gif','webp'])) {
+                            $filename = 'teacher_' . $id . '_' . uniqid() . '.' . $ext;
+                            if (move_uploaded_file($_FILES['photo']['tmp_name'], $uploadDir . $filename)) {
+                                $photoPath = 'storage/staff/' . $filename;
+                            } else {
+                                $errors[] = 'Failed to save uploaded photo.';
+                            }
+                        } else {
+                            $errors[] = 'Invalid photo format. Only JPG, PNG, GIF, and WebP are allowed.';
                         }
                     }
                 }
             }
 
-            $success = 'Teacher updated successfully.';
+            if (!$errors) {
+                $res = $conn->query("SHOW COLUMNS FROM teachers LIKE 'password_hash'");
+                $hasPasswordCol = $res && $res->num_rows > 0;
+                $passwordHash = null;
+                if ($hasPasswordCol && $new_password !== '') {
+                    $passwordHash = password_hash($new_password, PASSWORD_DEFAULT);
+                }
+
+                if ($photoPath && $passwordHash !== null) {
+                    $stmt = $conn->prepare("UPDATE teachers SET full_name=?, email=?, phone=?, photo_path=?, password_hash=? WHERE id=? AND school_id=?");
+                    $stmt->bind_param('sssssii', $full_name, $email, $phone, $photoPath, $passwordHash, $id, $schoolId);
+                } elseif ($photoPath) {
+                    $stmt = $conn->prepare("UPDATE teachers SET full_name=?, email=?, phone=?, photo_path=? WHERE id=? AND school_id=?");
+                    $stmt->bind_param('ssssii', $full_name, $email, $phone, $photoPath, $id, $schoolId);
+                } elseif ($passwordHash !== null) {
+                    $stmt = $conn->prepare("UPDATE teachers SET full_name=?, email=?, phone=?, password_hash=? WHERE id=? AND school_id=?");
+                    $stmt->bind_param('ssssii', $full_name, $email, $phone, $passwordHash, $id, $schoolId);
+                } else {
+                    $stmt = $conn->prepare("UPDATE teachers SET full_name=?, email=?, phone=? WHERE id=? AND school_id=?");
+                    $stmt->bind_param('sssii', $full_name, $email, $phone, $id, $schoolId);
+                }
+                $stmt->execute();
+                $stmt->close();
+                
+                if ($photoPath && $oldPhotoPath && file_exists(dirname(__DIR__) . '/' . $oldPhotoPath)) {
+                    unlink(dirname(__DIR__) . '/' . $oldPhotoPath);
+                }
+
+                // Update users table (teachers use local MySQL auth)
+                $stmt = $conn->prepare("UPDATE users SET full_name=?, email=? WHERE firebase_uid=? AND school_id=? AND role='teacher'");
+                $stmt->bind_param('sssi', $full_name, $email, $localUid, $schoolId);
+                $stmt->execute();
+                $stmt->close();
+
+                // Update teacher_class_subjects if table exists
+                $tcsExists = (bool) ($conn->query("SHOW TABLES LIKE 'teacher_class_subjects'")->num_rows ?? 0);
+                if ($tcsExists) {
+                    $class_ids   = isset($_POST['class_ids']) && is_array($_POST['class_ids'])
+                        ? array_map('intval', array_filter($_POST['class_ids'])) : [];
+                    $subject_ids = isset($_POST['subject_ids']) && is_array($_POST['subject_ids'])
+                        ? array_map('intval', array_filter($_POST['subject_ids'])) : [];
+                    $stmt = $conn->prepare("DELETE FROM teacher_class_subjects WHERE teacher_id=? AND school_id=?");
+                    $stmt->bind_param('ii', $id, $schoolId);
+                    $stmt->execute();
+                    $stmt->close();
+                    foreach ($class_ids as $cid) {
+                        foreach ($subject_ids as $sid) {
+                            if ($cid > 0 && $sid > 0) {
+                                $stmt = $conn->prepare("INSERT IGNORE INTO teacher_class_subjects (school_id, teacher_id, class_id, subject_id) VALUES (?, ?, ?, ?)");
+                                $stmt->bind_param('iiii', $schoolId, $id, $cid, $sid);
+                                $stmt->execute();
+                                $stmt->close();
+                            }
+                        }
+                    }
+                }
+
+                $success = 'Teacher updated successfully.';
+            }
         }
     } elseif ($action === 'delete') {
         $id = (int) ($_POST['id'] ?? 0);

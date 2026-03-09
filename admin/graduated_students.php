@@ -36,7 +36,7 @@ if (!$hasGraduatedCol): ?>
 $searchQ = trim($_GET['q'] ?? '');
 $searchParam = $searchQ !== '' ? '%' . $searchQ . '%' : null;
 
-$perPage = 20;
+$perPage = 10;
 $page    = max(1, (int) ($_GET['page'] ?? 1));
 $offset  = ($page - 1) * $perPage;
 

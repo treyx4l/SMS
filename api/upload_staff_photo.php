@@ -37,19 +37,26 @@ if (!$res || $res->num_rows === 0) {
 }
 
 // Verify record exists and belongs to school
-$stmt = $conn->prepare("SELECT id FROM {$table} WHERE id=? AND school_id=?");
+$stmt = $conn->prepare("SELECT id, photo_path FROM {$table} WHERE id=? AND school_id=?");
 $stmt->bind_param('ii', $id, $schoolId);
 $stmt->execute();
-if (!$stmt->get_result()->fetch_assoc()) {
+$row = $stmt->get_result()->fetch_assoc();
+if (!$row) {
     $stmt->close();
     header('Content-Type: application/json');
     echo json_encode(['error' => 'Record not found']);
     exit(404);
 }
+$oldPhotoPath = $row['photo_path'] ?? null;
 $stmt->close();
 
 $photoPath = null;
 if (!empty($_FILES['photo']['name']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+    if ($_FILES['photo']['size'] > 2 * 1024 * 1024) {
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'Photo size cannot exceed 2MB.']);
+        exit(400);
+    }
     $uploadDir = dirname(__DIR__) . '/storage/staff/';
     if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
     $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
@@ -57,13 +64,16 @@ if (!empty($_FILES['photo']['name']) && $_FILES['photo']['error'] === UPLOAD_ERR
         $filename = $type . '_' . $id . '_' . uniqid() . '.' . $ext;
         if (move_uploaded_file($_FILES['photo']['tmp_name'], $uploadDir . $filename)) {
             $photoPath = 'storage/staff/' . $filename;
+            if ($oldPhotoPath && file_exists(dirname(__DIR__) . '/' . $oldPhotoPath)) {
+                unlink(dirname(__DIR__) . '/' . $oldPhotoPath);
+            }
         }
     }
 }
 
 if (!$photoPath) {
     header('Content-Type: application/json');
-    echo json_encode(['error' => 'No valid photo uploaded']);
+    echo json_encode(['error' => 'No valid photo uploaded or size exceeded']);
     exit(400);
 }
 
