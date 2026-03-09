@@ -17,7 +17,8 @@ $queries = [
 ];
 
 foreach ($queries as $q) {
-    $sql = "SELECT {$q['name_col']} AS label, created_at FROM {$q['table']} WHERE school_id=? ORDER BY created_at DESC LIMIT 8";
+    // Pull a reasonable recent window per table; overall paging is done in PHP
+    $sql = "SELECT {$q['name_col']} AS label, created_at FROM {$q['table']} WHERE school_id=? ORDER BY created_at DESC LIMIT 100";
     $s = $conn->prepare($sql);
     if (!$s) continue;
     $s->bind_param('i', $schoolId);
@@ -37,7 +38,15 @@ foreach ($queries as $q) {
 
 // Sort all by time desc
 usort($activities, fn($a,$b) => strtotime($b['time']) - strtotime($a['time']));
-$activities = array_slice($activities, 0, 30);
+
+// Basic server-side pagination (within the recent window above)
+$perPage    = 10;
+$page       = max(1, (int) ($_GET['page'] ?? 1));
+$totalRows  = count($activities);
+$totalPages = $totalRows ? (int) ceil($totalRows / $perPage) : 1;
+$page       = min($page, max(1, $totalPages));
+$offset     = ($page - 1) * $perPage;
+$pagedActivities = array_slice($activities, $offset, $perPage);
 
 // Color map
 $colorMap = [
@@ -76,7 +85,12 @@ $colorMap = [
             <i data-lucide="activity" class="w-4 h-4 text-indigo-500"></i>
             <span class="text-sm font-semibold text-slate-800">Activity Log</span>
         </div>
-        <span class="text-xs text-slate-400">System-generated from recent records</span>
+        <span class="text-xs text-slate-400">
+            System-generated from recent records
+            <?php if ($totalRows): ?>
+                · Page <?= $page ?> of <?= $totalPages ?>
+            <?php endif; ?>
+        </span>
     </div>
 
     <?php if (!$activities): ?>
@@ -87,7 +101,7 @@ $colorMap = [
     </div>
     <?php else: ?>
     <div class="divide-y divide-slate-100">
-        <?php foreach ($activities as $i => $act):
+        <?php foreach ($pagedActivities as $i => $act):
             $c = $colorMap[$act['color']];
             $ts = strtotime($act['time']);
             $diff = time() - $ts;
@@ -115,6 +129,31 @@ $colorMap = [
             <span class="text-[11px] text-slate-400 shrink-0"><?= $rel ?></span>
         </div>
         <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+    <?php if ($totalPages > 1): ?>
+    <div class="px-5 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+        <p>
+            Showing <?= $totalRows ? $offset + 1 : 0 ?>–<?= min($offset + $perPage, $totalRows) ?> of <?= $totalRows ?>
+        </p>
+        <div class="flex items-center gap-1">
+            <?php
+            $baseUrl = 'activity.php?';
+            $query   = $_GET;
+            unset($query['page']);
+            $baseQuery = $query ? http_build_query($query) . '&' : '';
+            if ($page > 1): ?>
+                <a href="<?= $baseUrl . $baseQuery ?>page=<?= $page - 1 ?>" class="inline-flex items-center gap-1 px-2.5 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600">Prev</a>
+            <?php endif;
+            $start = max(1, $page - 2);
+            $end   = min($totalPages, $page + 2);
+            for ($i = $start; $i <= $end; $i++): ?>
+                <a href="<?= $baseUrl . $baseQuery ?>page=<?= $i ?>" class="inline-flex w-8 h-8 items-center justify-center rounded-lg text-xs font-medium <?= $i === $page ? 'bg-indigo-600 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50' ?>"><?= $i ?></a>
+            <?php endfor;
+            if ($page < $totalPages): ?>
+                <a href="<?= $baseUrl . $baseQuery ?>page=<?= $page + 1 ?>" class="inline-flex items-center gap-1 px-2.5 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600">Next</a>
+            <?php endif; ?>
+        </div>
     </div>
     <?php endif; ?>
 </div>

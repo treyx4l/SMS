@@ -109,7 +109,6 @@ function navLink(string $check, string $current): string {
             <div>
                 <div class="text-base font-bold text-slate-900 tracking-tight"><?= htmlspecialchars(strtoupper($schoolName)) ?></div>
                 <div class="text-[10px] font-semibold text-indigo-600 uppercase tracking-widest mt-0.5">Admin Console</div>
-                <div class="text-[10px] text-slate-400 mt-0.5">Limit: 25 users</div>
             </div>
         </div>
 
@@ -152,6 +151,14 @@ function navLink(string $check, string $current): string {
                     <a href="students.php" class="<?= navLink('Students', $page_title) ?>">
                         <i data-lucide="graduation-cap" class="w-4 h-4 shrink-0"></i>
                         <span>Students</span>
+                    </a>
+                    <a href="graduated_students.php" class="<?= navLink('Graduated Students', $page_title) ?>">
+                        <i data-lucide="award" class="w-4 h-4 shrink-0"></i>
+                        <span>Graduated students</span>
+                    </a>
+                    <a href="promotion.php" class="<?= navLink('Promotion', $page_title) ?>">
+                        <i data-lucide="chevrons-up" class="w-4 h-4 shrink-0"></i>
+                        <span>Promotion</span>
                     </a>
                     <a href="teachers.php" class="<?= navLink('Teachers', $page_title) ?>">
                         <i data-lucide="user-check" class="w-4 h-4 shrink-0"></i>
@@ -257,59 +264,45 @@ function navLink(string $check, string $current): string {
                 <h1 class="text-lg font-bold text-slate-900"><?= htmlspecialchars($page_title) ?></h1>
             </div>
             <div class="flex items-center gap-3">
-                <!-- Message icon (opens modal) -->
+                <!-- Messages -->
                 <button type="button"
                         id="adminMessagesButton"
                         class="relative inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 focus:outline-none"
-                        aria-label="Messages"
-                        title="Messages">
+                        aria-label="Messages" title="Messages">
                     <i data-lucide="message-circle" class="w-4 h-4"></i>
-                    <span class="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-indigo-500 text-white text-[9px] font-semibold">
-                        2
-                    </span>
+                    <span id="adminMsgBadge" class="hidden absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-indigo-500 text-white text-[9px] font-semibold"></span>
                 </button>
 
-                <!-- Notifications icon + dropdown -->
+                <!-- Notifications -->
                 <div class="relative">
                     <button type="button"
                             id="adminNotificationsButton"
                             class="relative inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 focus:outline-none"
-                            aria-label="Notifications"
-                            title="Notifications">
+                            aria-label="Notifications" title="Notifications">
                         <i data-lucide="bell" class="w-4 h-4"></i>
-                        <span class="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[9px] font-semibold">
-                            3
-                        </span>
+                        <span id="adminNotifBadge" class="hidden absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[9px] font-semibold"></span>
                     </button>
                     <div id="adminNotificationsMenu"
-                         class="hidden absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-lg py-1 text-[11px] text-slate-700 z-20">
+                         class="hidden absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl py-1 text-[11px] text-slate-700 z-50">
                         <div class="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
                             <span class="text-[11px] font-semibold text-slate-800">Notifications</span>
-                            <span class="text-[10px] text-indigo-600 cursor-pointer hover:text-indigo-700">Mark all read</span>
+                            <button id="adminMarkAllRead" class="text-[10px] text-indigo-600 hover:text-indigo-700">Mark all read</button>
                         </div>
-                        <button type="button" class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left">
-                            <span class="mt-1 w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                            <span>
-                                <span class="block text-[11px] font-medium text-slate-800">New teacher account</span>
-                                <span class="block text-[10px] text-slate-500">Jane Smith was added to staff.</span>
-                            </span>
-                        </button>
-                        <button type="button" class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left">
-                            <span class="mt-1 w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            <span>
-                                <span class="block text-[11px] font-medium text-slate-800">Lesson plan submitted</span>
-                                <span class="block text-[10px] text-slate-500">Week 3 Math plan awaits approval.</span>
-                            </span>
-                        </button>
-                        <button type="button" class="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-slate-50 text-left">
-                            <span class="mt-1 w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                            <span>
-                                <span class="block text-[11px] font-medium text-slate-800">Settings update</span>
-                                <span class="block text-[10px] text-slate-500">School profile was modified.</span>
-                            </span>
-                        </button>
-                        <div class="border-t border-slate-100 mt-1 pt-1">
-                            <a href="activity.php" class="flex items-center justify-between px-3 py-1.5 hover:bg-slate-50">
+                        <!-- Group 1: Parents · Staff · Admin -->
+                        <div class="px-3 pt-2 pb-0.5 text-[10px] uppercase tracking-wide text-slate-400 flex items-center gap-1">
+                            <i data-lucide="users" class="w-2.5 h-2.5"></i><span>Parents &middot; Staff &middot; Admin</span>
+                        </div>
+                        <div id="adminNotifGroup1"></div>
+                        <!-- Group 2: Staff & Admin -->
+                        <div class="px-3 pt-2 pb-0.5 text-[10px] uppercase tracking-wide text-slate-400 flex items-center gap-1">
+                            <i data-lucide="shield" class="w-2.5 h-2.5"></i><span>Staff &amp; Admin</span>
+                        </div>
+                        <div id="adminNotifGroup2"></div>
+                        <div class="border-t border-slate-100 mt-1 pt-1 flex items-center justify-between">
+                            <button type="button" id="adminMarkAllRead" class="px-3 py-1.5 text-[10px] font-medium text-slate-500 hover:text-slate-800 transition-colors">
+                                Clear notifications
+                            </button>
+                            <a href="activity.php" class="flex items-center gap-1 px-3 py-1.5 hover:bg-slate-50 text-[11px] text-slate-600">
                                 <span>View activity log</span>
                                 <i data-lucide="arrow-right" class="w-3 h-3"></i>
                             </a>
@@ -363,57 +356,11 @@ function navLink(string $check, string $current): string {
             </div>
         </header>
 
-        <!-- Messages modal (overlay, hidden by default) -->
-        <div id="adminMessagesModal"
-             class="hidden fixed inset-0 z-30 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-            <div class="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md mx-4">
-                <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                    <div>
-                        <h2 class="text-sm font-semibold text-slate-800">Messages (sample)</h2>
-                        <p class="text-[11px] text-slate-400">Later, this will show real messages or announcements.</p>
-                    </div>
-                    <button type="button"
-                            id="adminMessagesClose"
-                            class="inline-flex items-center justify-center w-7 h-7 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700">
-                        <i data-lucide="x" class="w-4 h-4"></i>
-                    </button>
-                </div>
-                <div class="px-4 py-3 space-y-2 text-[11px] text-slate-700 max-h-72 overflow-y-auto">
-                    <div class="flex items-start gap-2 rounded-lg border border-slate-100 px-3 py-2">
-                        <span class="mt-0.5 w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-semibold">ADM</span>
-                        <div>
-                            <div class="flex items-center justify-between">
-                                <span class="font-medium text-slate-800">School Admin</span>
-                                <span class="text-[10px] text-slate-400">2h ago</span>
-                            </div>
-                            <p class="text-[11px] text-slate-600 mt-0.5">
-                                Please remember to submit your Week 3 lesson notes before Friday.
-                            </p>
-                        </div>
-                    </div>
-                    <div class="flex items-start gap-2 rounded-lg border border-slate-100 px-3 py-2">
-                        <span class="mt-0.5 w-6 h-6 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center text-[10px] font-semibold">HOD</span>
-                        <div>
-                            <div class="flex items-center justify-between">
-                                <span class="font-medium text-slate-800">Head of Department</span>
-                                <span class="text-[10px] text-slate-400">Yesterday</span>
-                            </div>
-                            <p class="text-[11px] text-slate-600 mt-0.5">
-                                Mid-term tests will start next week. Update your grading templates where necessary.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <div class="px-4 py-3 border-t border-slate-100 flex items-center justify-between">
-                    <span class="text-[11px] text-slate-400">Messaging is not yet connected &mdash; this is just a UI preview.</span>
-                    <button type="button"
-                            id="adminMessagesOk"
-                            class="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700">
-                        Close
-                    </button>
-                </div>
-            </div>
-        </div>
+        <?php
+        $chat_role   = 'admin';
+        $chat_prefix = 'admin';
+        include dirname(__DIR__) . '/includes/chat_modal.php';
+        ?>
 
         <!-- Flash message -->
         <?php if (isset($flash_message)): ?>

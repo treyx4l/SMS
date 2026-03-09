@@ -179,6 +179,48 @@ function parentNavLink(string $check, string $current): string
         <header class="flex items-center justify-between mb-4">
             <h1 class="text-lg font-bold text-slate-900"><?= htmlspecialchars($page_title) ?></h1>
             <div class="flex items-center gap-3">
+                <!-- Messages -->
+                <button type="button"
+                        id="parentMessagesButton"
+                        class="relative inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 focus:outline-none"
+                        aria-label="Messages" title="Messages">
+                    <i data-lucide="message-circle" class="w-4 h-4"></i>
+                    <span id="parentMsgBadge" class="hidden absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-indigo-500 text-white text-[9px] font-semibold"></span>
+                </button>
+
+                <!-- Notifications -->
+                <div class="relative">
+                    <button type="button"
+                            id="parentNotificationsButton"
+                            class="relative inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 focus:outline-none"
+                            aria-label="Notifications" title="Notifications">
+                        <i data-lucide="bell" class="w-4 h-4"></i>
+                        <span id="parentNotifBadge" class="hidden absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[9px] font-semibold"></span>
+                    </button>
+                    <div id="parentNotificationsMenu"
+                         class="hidden absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl py-1 text-[11px] text-slate-700 z-50">
+                        <div class="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
+                            <span class="text-[11px] font-semibold text-slate-800">Notifications</span>
+                            <button id="parentMarkAllRead" class="text-[10px] text-indigo-600 hover:text-indigo-700">Mark all read</button>
+                        </div>
+                        <!-- Group 1: Parents · Staff · Admin -->
+                        <div class="px-3 pt-2 pb-0.5 text-[10px] uppercase tracking-wide text-slate-400 flex items-center gap-1">
+                            <i data-lucide="users" class="w-2.5 h-2.5"></i><span>Parents &middot; Staff &middot; Admin</span>
+                        </div>
+                        <div id="parentNotifGroup1"></div>
+                        <div class="border-t border-slate-100 mt-1 pt-1 flex items-center justify-between">
+                            <button type="button" id="parentClearAll" class="px-3 py-1.5 text-[10px] font-medium text-slate-500 hover:text-slate-800 transition-colors">
+                                Clear notifications
+                            </button>
+                            <a href="children.php" class="flex items-center gap-1 px-3 py-1.5 hover:bg-slate-50 text-[11px] text-slate-600">
+                                <span>View children</span>
+                                <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profile dropdown -->
                 <div class="relative">
                     <button type="button"
                             id="parentProfileButton"
@@ -222,3 +264,9 @@ function parentNavLink(string $check, string $current): string
                 </div>
             </div>
         </header>
+
+        <?php
+        $chat_role   = 'parent';
+        $chat_prefix = 'parent';
+        include dirname(__DIR__) . '/includes/chat_modal.php';
+        ?>

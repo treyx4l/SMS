@@ -5,10 +5,21 @@ require_once __DIR__ . '/layout.php';
 $conn     = get_db_connection();
 $schoolId = current_school_id();
 
+// Detect graduation column
+$hasGraduatedCol = false;
+$res = $conn->query("SHOW COLUMNS FROM students LIKE 'is_graduated'");
+if ($res && $res->num_rows > 0) {
+    $hasGraduatedCol = true;
+}
+
 // Entity counts
 $counts = [];
 foreach (['students','teachers','parents','classes'] as $tbl) {
-    $s = $conn->prepare("SELECT COUNT(*) AS c FROM {$tbl} WHERE school_id = ?");
+    if ($tbl === 'students' && $hasGraduatedCol) {
+        $s = $conn->prepare("SELECT COUNT(*) AS c FROM students WHERE school_id = ? AND (is_graduated IS NULL OR is_graduated = 0)");
+    } else {
+        $s = $conn->prepare("SELECT COUNT(*) AS c FROM {$tbl} WHERE school_id = ?");
+    }
     $s->bind_param('i', $schoolId);
     $s->execute();
     $counts[$tbl] = (int)($s->get_result()->fetch_assoc()['c'] ?? 0);
@@ -21,7 +32,11 @@ for ($i = 5; $i >= 0; $i--) {
     $label = date('M Y', strtotime("-{$i} months"));
     $y     = date('Y', strtotime("-{$i} months"));
     $m     = date('m', strtotime("-{$i} months"));
-    $s = $conn->prepare("SELECT COUNT(*) AS c FROM students WHERE school_id = ? AND YEAR(created_at)=? AND MONTH(created_at)=?");
+    $sql = "SELECT COUNT(*) AS c FROM students WHERE school_id = ? AND YEAR(created_at)=? AND MONTH(created_at)=?";
+    if ($hasGraduatedCol) {
+        $sql .= " AND (is_graduated IS NULL OR is_graduated = 0)";
+    }
+    $s = $conn->prepare($sql);
     $s->bind_param('iii', $schoolId, $y, $m);
     $s->execute();
     $monthlyData[] = ['label' => $label, 'count' => (int)($s->get_result()->fetch_assoc()['c'] ?? 0)];
@@ -37,9 +52,14 @@ $res = $s->get_result();
 while ($row = $res->fetch_assoc()) $recentTeachers[] = $row;
 $s->close();
 
-// Recent students (last 5 added)
+// Recent students (last 5 added, still active)
 $recentStudents = [];
-$s = $conn->prepare("SELECT CONCAT(first_name,' ',last_name) AS full_name, created_at FROM students WHERE school_id = ? ORDER BY created_at DESC LIMIT 5");
+$sql = "SELECT CONCAT(first_name,' ',last_name) AS full_name, created_at FROM students WHERE school_id = ?";
+if ($hasGraduatedCol) {
+    $sql .= " AND (is_graduated IS NULL OR is_graduated = 0)";
+}
+$sql .= " ORDER BY created_at DESC LIMIT 5";
+$s = $conn->prepare($sql);
 $s->bind_param('i', $schoolId);
 $s->execute();
 $res = $s->get_result();

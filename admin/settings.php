@@ -55,45 +55,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$errors) {
         $logoPath = $school['logo_path'] ?? null;
+        $oldLogoPath = $school['logo_path'] ?? null;
 
         // Logo upload
         if (!empty($_FILES['logo']['name']) && $_FILES['logo']['error'] === UPLOAD_ERR_OK) {
-            $uploadDir = dirname(__DIR__) . '/storage/schools/';
-            if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0755, true);
-            }
-            $ext = strtolower(pathinfo($_FILES['logo']['name'], PATHINFO_EXTENSION));
-            if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'])) {
-                $filename = 'school_' . $schoolId . '_' . uniqid() . '.' . $ext;
-                if (move_uploaded_file($_FILES['logo']['tmp_name'], $uploadDir . $filename)) {
-                    $logoPath = 'storage/schools/' . $filename;
+            if ($_FILES['logo']['size'] > 2 * 1024 * 1024) {
+                $errors[] = 'Logo size cannot exceed 2MB.';
+            } else {
+                $uploadDir = dirname(__DIR__) . '/storage/schools/';
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0755, true);
+                }
+                $ext = strtolower(pathinfo($_FILES['logo']['name'], PATHINFO_EXTENSION));
+                if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'])) {
+                    $filename = 'school_' . $schoolId . '_' . uniqid() . '.' . $ext;
+                    if (move_uploaded_file($_FILES['logo']['tmp_name'], $uploadDir . $filename)) {
+                        $logoPath = 'storage/schools/' . $filename;
+                    } else {
+                        $errors[] = 'Failed to save uploaded logo.';
+                    }
+                } else {
+                    $errors[] = 'Invalid logo format. Only JPG, PNG, GIF, WebP, and SVG are allowed.';
                 }
             }
         }
 
-        $cols = "name = ?, code = ?, accent_color = ?, logo_path = ?";
-        $params = [$name, $code, $accent_color, $logoPath];
-        $types = 'ssss';
+        if (!$errors) {
+            $cols = "name = ?, code = ?, accent_color = ?, logo_path = ?";
+            $params = [$name, $code, $accent_color, $logoPath];
+            $types = 'ssss';
 
-        if ($hasAddress) { $cols .= ", address = ?"; $params[] = $address; $types .= 's'; }
-        if ($hasPhone)  { $cols .= ", phone = ?";   $params[] = $phone;   $types .= 's'; }
-        if ($hasEmail)  { $cols .= ", email = ?";   $params[] = $email;   $types .= 's'; }
+            if ($hasAddress) { $cols .= ", address = ?"; $params[] = $address; $types .= 's'; }
+            if ($hasPhone)  { $cols .= ", phone = ?";   $params[] = $phone;   $types .= 's'; }
+            if ($hasEmail)  { $cols .= ", email = ?";   $params[] = $email;   $types .= 's'; }
 
-        $params[] = $schoolId;
-        $types .= 'i';
+            $params[] = $schoolId;
+            $types .= 'i';
 
-        $stmt = $conn->prepare("UPDATE schools SET {$cols} WHERE id = ?");
-        $stmt->bind_param($types, ...$params);
-        $stmt->execute();
-        $stmt->close();
+            $stmt = $conn->prepare("UPDATE schools SET {$cols} WHERE id = ?");
+            $stmt->bind_param($types, ...$params);
+            $stmt->execute();
+            $stmt->close();
 
-        $success = 'Settings saved.';
+            if ($logoPath !== $oldLogoPath && $oldLogoPath && file_exists(dirname(__DIR__) . '/' . $oldLogoPath)) {
+                unlink(dirname(__DIR__) . '/' . $oldLogoPath);
+            }
 
-        $stmt = $conn->prepare("SELECT * FROM schools WHERE id = ?");
-        $stmt->bind_param('i', $schoolId);
-        $stmt->execute();
-        $school = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
+            $success = 'Settings saved.';
+
+            $stmt = $conn->prepare("SELECT * FROM schools WHERE id = ?");
+            $stmt->bind_param('i', $schoolId);
+            $stmt->execute();
+            $school = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+        }
     }
 }
 ?>

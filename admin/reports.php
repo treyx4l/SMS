@@ -5,27 +5,43 @@ require_once __DIR__ . '/layout.php';
 $conn     = get_db_connection();
 $schoolId = current_school_id();
 
+// Detect graduation column
+$hasGraduatedCol = false;
+$res = $conn->query("SHOW COLUMNS FROM students LIKE 'is_graduated'");
+if ($res && $res->num_rows > 0) {
+    $hasGraduatedCol = true;
+}
+
 // Counts per report category
 $counts = [];
 foreach (['students','teachers','parents','classes'] as $tbl) {
-    $s = $conn->prepare("SELECT COUNT(*) AS c FROM {$tbl} WHERE school_id = ?");
+    if ($tbl === 'students' && $hasGraduatedCol) {
+        $s = $conn->prepare("SELECT COUNT(*) AS c FROM students WHERE school_id = ? AND (is_graduated IS NULL OR is_graduated = 0)");
+    } else {
+        $s = $conn->prepare("SELECT COUNT(*) AS c FROM {$tbl} WHERE school_id = ?");
+    }
     $s->bind_param('i', $schoolId);
     $s->execute();
     $counts[$tbl] = (int)($s->get_result()->fetch_assoc()['c'] ?? 0);
     $s->close();
 }
 
-// Students per class
+// Students per class (active only if graduation enabled)
 $classBreakdown = [];
-$s = $conn->prepare("
+$sql = "
     SELECT c.name AS class_name, COUNT(st.id) AS student_count
     FROM classes c
-    LEFT JOIN students st ON st.class_id = c.id AND st.school_id = c.school_id
+    LEFT JOIN students st ON st.class_id = c.id AND st.school_id = c.school_id";
+if ($hasGraduatedCol) {
+    $sql .= " AND (st.is_graduated IS NULL OR st.is_graduated = 0)";
+}
+$sql .= "
     WHERE c.school_id = ?
     GROUP BY c.id, c.name
     ORDER BY student_count DESC
     LIMIT 10
-");
+";
+$s = $conn->prepare($sql);
 $s->bind_param('i', $schoolId);
 $s->execute();
 $res = $s->get_result();
@@ -76,8 +92,8 @@ $s->close();
             <i data-lucide="bar-chart-2" class="w-4 h-4 text-indigo-500"></i>
         </div>
         <?php if ($classBreakdown): ?>
-        <div class="relative w-full overflow-hidden" style="height:220px; min-height:220px; max-height:220px;">
-            <canvas id="classChart" class="block w-full" style="height:220px !important; max-height:220px;"></canvas>
+        <div class="relative w-full overflow-hidden" style="height:180px; min-height:180px; max-height:180px;">
+            <canvas id="classChart" class="block w-full" style="height:180px !important; max-height:180px;"></canvas>
         </div>
         <?php else: ?>
         <div class="flex flex-col items-center justify-center h-40 text-slate-400">

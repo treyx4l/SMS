@@ -20,6 +20,36 @@ $stmt->close();
 $filterClass = (int) ($_GET['class_id'] ?? 0);
 $filterDate  = trim($_GET['date'] ?? date('Y-m-d'));
 
+$perPage = 10;
+$page    = max(1, (int) ($_GET['page'] ?? 1));
+
+// Aggregates for present/late/absent (all pages)
+$present = $late = $absent = 0;
+$totalRows = 0;
+if ($tablesExist) {
+    $aggSql = "SELECT status, COUNT(*) as c FROM attendance a WHERE a.school_id=?";
+    $aggParams = [$schoolId];
+    $aggTypes = 'i';
+    if ($filterClass) { $aggSql .= " AND a.class_id=?"; $aggParams[] = $filterClass; $aggTypes .= 'i'; }
+    if ($filterDate)  { $aggSql .= " AND a.date=?"; $aggParams[] = $filterDate; $aggTypes .= 's'; }
+    $aggSql .= " GROUP BY status";
+    $astmt = $conn->prepare($aggSql);
+    $astmt->bind_param($aggTypes, ...$aggParams);
+    $astmt->execute();
+    $ares = $astmt->get_result();
+    while ($arow = $ares->fetch_assoc()) {
+        if ($arow['status'] === 'present') $present = $arow['c'];
+        elseif ($arow['status'] === 'late') $late = $arow['c'];
+        elseif ($arow['status'] === 'absent') $absent = $arow['c'];
+    }
+    $astmt->close();
+    $totalRows = $present + $late + $absent;
+}
+
+$totalPages = $totalRows ? (int) ceil($totalRows / $perPage) : 1;
+$page       = min($page, max(1, $totalPages));
+$offset     = ($page - 1) * $perPage;
+
 $records = [];
 if ($tablesExist) {
     $sql = "SELECT a.id, a.student_id, a.date, a.status, a.remarks,
@@ -33,7 +63,10 @@ if ($tablesExist) {
     $types  = 'i';
     if ($filterClass) { $sql .= " AND a.class_id=?"; $params[] = $filterClass; $types .= 'i'; }
     if ($filterDate)  { $sql .= " AND a.date=?"; $params[] = $filterDate; $types .= 's'; }
-    $sql .= " ORDER BY c.name, s.first_name, s.last_name";
+    $sql .= " ORDER BY c.name, s.first_name, s.last_name LIMIT ? OFFSET ?";
+    $params[] = $perPage;
+    $params[] = $offset;
+    $types .= 'ii';
 
     $stmt = $conn->prepare($sql);
     $stmt->bind_param($types, ...$params);
@@ -42,10 +75,6 @@ if ($tablesExist) {
     while ($row = $res->fetch_assoc()) $records[] = $row;
     $stmt->close();
 }
-
-$present = count(array_filter($records, fn($r) => $r['status'] === 'present'));
-$late    = count(array_filter($records, fn($r) => $r['status'] === 'late'));
-$absent  = count(array_filter($records, fn($r) => $r['status'] === 'absent'));
 ?>
 
 <?php if (!$tablesExist): ?>
@@ -126,6 +155,29 @@ $absent  = count(array_filter($records, fn($r) => $r['status'] === 'absent'));
             </tbody>
         </table>
     </div>
+    <?php if ($totalPages > 1): ?>
+    <div class="px-5 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+        <p>Showing <?= $totalRows ? $offset + 1 : 0 ?>–<?= min($offset + $perPage, $totalRows) ?> of <?= $totalRows ?> records</p>
+        <div class="flex items-center gap-1">
+            <?php
+            $baseUrl = 'attendance.php?';
+            $query = $_GET;
+            unset($query['page']);
+            $baseQuery = $query ? http_build_query($query) . '&' : '';
+            if ($page > 1): ?>
+            <a href="<?= $baseUrl . $baseQuery ?>page=<?= $page - 1 ?>" class="px-2.5 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50">Prev</a>
+            <?php endif;
+            $start = max(1, $page - 2);
+            $end = min($totalPages, $page + 2);
+            for ($i = $start; $i <= $end; $i++): ?>
+            <a href="<?= $baseUrl . $baseQuery ?>page=<?= $i ?>" class="w-8 h-8 flex items-center justify-center rounded-lg <?= $i === $page ? 'bg-indigo-600 text-white' : 'border border-slate-200 hover:bg-slate-50' ?>"><?= $i ?></a>
+            <?php endfor;
+            if ($page < $totalPages): ?>
+            <a href="<?= $baseUrl . $baseQuery ?>page=<?= $page + 1 ?>" class="px-2.5 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50">Next</a>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
 </div>
 
 <?php endif; ?>
