@@ -32,13 +32,39 @@ if ($userId && $schoolId) {
 }
 
 // Optional tables for transport module (these may not exist yet)
-$hasRoutes       = (bool) ($conn->query("SHOW TABLES LIKE 'bus_routes'")->num_rows ?? 0);
-$hasAssignments  = (bool) ($conn->query("SHOW TABLES LIKE 'bus_assignments'")->num_rows ?? 0);
-$hasMisconducts  = (bool) ($conn->query("SHOW TABLES LIKE 'student_misconducts'")->num_rows ?? 0);
+$hasRoutes      = (bool) ($conn->query("SHOW TABLES LIKE 'bus_routes'")->num_rows ?? 0);
+$hasMisconducts = (bool) ($conn->query("SHOW TABLES LIKE 'student_misconducts'")->num_rows ?? 0);
 
-$assignedStudents = []; // per route: route_id => ['route' => ..., 'students' => [...]]
-$routesForDriver  = []; // route_id => route info
-$today            = date('Y-m-d');
+$today          = date('Y-m-d');
+$driverRoute    = null;
+$assignedStudents = [];
+
+// Load this driver's route (if any)
+if ($driverId && $hasRoutes) {
+    $stmt = $conn->prepare("
+        SELECT d.route_id, r.route_name, r.description
+        FROM bus_drivers d
+        LEFT JOIN bus_routes r
+          ON r.id = d.route_id
+         AND r.school_id = d.school_id
+        WHERE d.id = ?
+          AND d.school_id = ?
+        LIMIT 1
+    ");
+    if ($stmt) {
+        $stmt->bind_param('ii', $driverId, $schoolId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if ($row && (int) $row['route_id'] > 0) {
+            $driverRoute = [
+                'id'          => (int) $row['route_id'],
+                'route_name'  => $row['route_name'],
+                'description' => $row['description'],
+            ];
+        }
+    }
+}
 
 // Handle misconduct report submission if table exists
 $errors  = [];
@@ -69,69 +95,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $driverId && $hasMisconducts) {
     }
 }
 
-// Load routes and assigned students if tables exist
-if ($driverId && $schoolId && $hasAssignments) {
-    // Load routes for this driver (if routes table exists)
-    if ($hasRoutes) {
-        $stmt = $conn->prepare("
-            SELECT r.id, r.name, r.code, r.start_point, r.end_point
-            FROM bus_routes r
-            JOIN bus_assignments a
-              ON a.route_id = r.id
-             AND a.school_id = r.school_id
-            WHERE r.school_id = ?
-              AND a.driver_id = ?
-            GROUP BY r.id, r.name, r.code, r.start_point, r.end_point
-            ORDER BY r.name
-        ");
-        if ($stmt) {
-            $stmt->bind_param('ii', $schoolId, $driverId);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            while ($row = $res->fetch_assoc()) {
-                $routesForDriver[(int) $row['id']] = $row;
-            }
-            $stmt->close();
-        }
-    }
-
-    // Assigned students (manifest) for today (or generic if no date column)
-    $stmt = $conn->query("SHOW COLUMNS FROM bus_assignments LIKE 'date'");
-    $hasDateCol = $stmt && $stmt->num_rows > 0;
-
-    $sql = "
-        SELECT a.id, a.route_id, a.student_id, a.pickup_stop, a.dropoff_stop,
-               s.first_name, s.last_name
-        FROM bus_assignments a
-        JOIN students s
-          ON s.id = a.student_id
-         AND s.school_id = a.school_id
-        WHERE a.school_id = ?
-          AND a.driver_id = ?
-    ";
-    if ($hasDateCol) {
-        $sql .= " AND a.date = ?";
-    }
-    $sql .= " ORDER BY a.route_id, s.first_name, s.last_name";
-
-    $stmt = $conn->prepare($sql);
+// Load students assigned to this driver's route (via students.route_id)
+if ($driverRoute) {
+    $stmt = $conn->prepare("
+        SELECT s.id, s.first_name, s.last_name, s.route_id
+        FROM students s
+        WHERE s.school_id = ?
+          AND s.route_id = ?
+        ORDER BY s.first_name, s.last_name
+    ");
     if ($stmt) {
-        if ($hasDateCol) {
-            $stmt->bind_param('iis', $schoolId, $driverId, $today);
-        } else {
-            $stmt->bind_param('ii', $schoolId, $driverId);
-        }
+        $rid = (int) $driverRoute['id'];
+        $stmt->bind_param('ii', $schoolId, $rid);
         $stmt->execute();
         $res = $stmt->get_result();
         while ($row = $res->fetch_assoc()) {
-            $rid = (int) $row['route_id'];
-            if (!isset($assignedStudents[$rid])) {
-                $assignedStudents[$rid] = [
-                    'route'    => $routesForDriver[$rid] ?? ['id' => $rid, 'name' => 'Route #' . $rid, 'code' => null, 'start_point' => null, 'end_point' => null],
-                    'students' => [],
-                ];
-            }
-            $assignedStudents[$rid]['students'][] = $row;
+            $assignedStudents[] = $row;
         }
         $stmt->close();
     }
@@ -159,12 +138,11 @@ if ($driverId && $schoolId && $hasAssignments) {
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div class="border border-slate-100 rounded-lg px-3 py-3">
                 <div class="text-xs text-slate-500 mb-1">Routes assigned</div>
-                <div class="text-xl font-bold text-emerald-600"><?= count($routesForDriver) ?></div>
+                <div class="text-xl font-bold text-emerald-600"><?= $driverRoute ? 1 : 0 ?></div>
             </div>
             <div class="border border-slate-100 rounded-lg px-3 py-3">
                 <div class="text-xs text-slate-500 mb-1">Students on manifest</div>
-                <?php $studentCount = 0; foreach ($assignedStudents as $r) $studentCount += count($r['students']); ?>
-                <div class="text-xl font-bold text-sky-600"><?= $studentCount ?></div>
+                <div class="text-xl font-bold text-sky-600"><?= count($assignedStudents) ?></div>
             </div>
             <div class="border border-slate-100 rounded-lg px-3 py-3">
                 <div class="text-xs text-slate-500 mb-1">Misconduct reports</div>
@@ -175,11 +153,9 @@ if ($driverId && $schoolId && $hasAssignments) {
                 <div class="text-xl font-bold text-rose-500">–</div>
             </div>
         </div>
-
-        <?php if (!$hasAssignments): ?>
+        <?php if (!$driverRoute): ?>
             <p class="mt-3 text-[11px] text-amber-700">
-                The transport assignment tables are not set up yet. Ask the admin to create bus routes and assign students
-                so your daily manifest appears here.
+                No bus route is assigned to your driver profile yet. Ask the admin to link you to a route so your manifest appears here.
             </p>
         <?php endif; ?>
     </div>
@@ -196,56 +172,48 @@ if ($driverId && $schoolId && $hasAssignments) {
                     <p class="text-[11px] text-amber-700">
                         Your login is not linked to a bus driver record. Contact the admin to fix this mapping.
                     </p>
-                <?php elseif (!$hasAssignments || empty($assignedStudents)): ?>
+                <?php elseif (!$driverRoute): ?>
                     <p class="text-[11px] text-slate-500">
-                        No students are currently assigned to your routes for today. Once assignments are created, they will appear here.
+                        No route is currently linked to you. Once the admin assigns you a bus route, you will see your manifest here.
+                    </p>
+                <?php elseif (empty($assignedStudents)): ?>
+                    <p class="text-[11px] text-slate-500">
+                        No students are currently assigned to your route. Once students are linked to this route, they will appear here.
                     </p>
                 <?php else: ?>
-                    <?php foreach ($assignedStudents as $routeId => $info): ?>
-                        <?php $r = $info['route']; ?>
-                        <div class="border border-slate-100 rounded-lg">
-                            <div class="px-3 py-2 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                                <div>
-                                    <div class="text-xs font-semibold text-slate-800">
-                                        <?= htmlspecialchars($r['name'] ?? ('Route #' . $routeId)) ?>
-                                    </div>
-                                    <div class="text-[10px] text-slate-500">
-                                        <?= htmlspecialchars($r['start_point'] ?? 'Start') ?> &rarr; <?= htmlspecialchars($r['end_point'] ?? 'End') ?>
-                                    </div>
+                    <div class="border border-slate-100 rounded-lg">
+                        <div class="px-3 py-2 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                            <div>
+                                <div class="text-xs font-semibold text-slate-800">
+                                    <?= htmlspecialchars($driverRoute['route_name'] ?? ('Route #' . $driverRoute['id'])) ?>
                                 </div>
-                                <?php if (!empty($r['code'])): ?>
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px]">
-                                        <?= htmlspecialchars($r['code']) ?>
-                                    </span>
-                                <?php endif; ?>
-                            </div>
-                            <div class="p-3 space-y-1.5 text-[11px]">
-                                <?php foreach ($info['students'] as $s): ?>
-                                <div class="flex items-center justify-between gap-2">
-                                    <div>
-                                        <div class="font-medium text-slate-800">
-                                            <?= htmlspecialchars($s['first_name'] . ' ' . $s['last_name']) ?>
-                                        </div>
-                                        <div class="text-[10px] text-slate-500">
-                                            Pickup: <?= htmlspecialchars($s['pickup_stop'] ?? '—') ?>
-                                            &middot; Drop-off: <?= htmlspecialchars($s['dropoff_stop'] ?? '—') ?>
-                                        </div>
-                                    </div>
-                                    <div class="flex items-center gap-1.5">
-                                        <button type="button"
-                                                class="px-2 py-0.5 rounded-full border border-emerald-200 text-[10px] text-emerald-700 bg-emerald-50">
-                                            Present
-                                        </button>
-                                        <button type="button"
-                                                class="px-2 py-0.5 rounded-full border border-rose-200 text-[10px] text-rose-700 bg-rose-50">
-                                            Mark absent
-                                        </button>
-                                    </div>
+                                <div class="text-[10px] text-slate-500">
+                                    <?= htmlspecialchars($driverRoute['description'] ?? 'Bus route') ?>
                                 </div>
-                                <?php endforeach; ?>
                             </div>
                         </div>
-                    <?php endforeach; ?>
+                        <div class="p-3 space-y-1.5 text-[11px]">
+                            <?php foreach ($assignedStudents as $s): ?>
+                            <div class="flex items-center justify-between gap-2">
+                                <div>
+                                    <div class="font-medium text-slate-800">
+                                        <?= htmlspecialchars($s['first_name'] . ' ' . $s['last_name']) ?>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <button type="button"
+                                            class="px-2 py-0.5 rounded-full border border-emerald-200 text-[10px] text-emerald-700 bg-emerald-50">
+                                        Present
+                                    </button>
+                                    <button type="button"
+                                            class="px-2 py-0.5 rounded-full border border-rose-200 text-[10px] text-rose-700 bg-rose-50">
+                                        Mark absent
+                                    </button>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
                 <?php endif; ?>
             </div>
         </div>
@@ -254,29 +222,22 @@ if ($driverId && $schoolId && $hasAssignments) {
         <div class="space-y-4">
             <div class="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
                 <h3 class="text-xs font-semibold text-slate-800 mb-2">My routes</h3>
-                <?php if (!$hasRoutes || !$routesForDriver): ?>
+                <?php if (!$driverRoute): ?>
                     <p class="text-[11px] text-slate-500">
                         No routes are linked to you yet. When the admin sets up bus routes and assigns you as driver, they will be listed here.
                     </p>
                 <?php else: ?>
                     <div class="space-y-2 text-[11px]">
-                        <?php foreach ($routesForDriver as $r): ?>
                         <div class="border border-slate-100 rounded-lg px-3 py-2">
                             <div class="flex items-center justify-between">
                                 <div>
-                                    <div class="font-medium text-slate-800"><?= htmlspecialchars($r['name']) ?></div>
+                                    <div class="font-medium text-slate-800"><?= htmlspecialchars($driverRoute['route_name']) ?></div>
                                     <div class="text-[10px] text-slate-500">
-                                        <?= htmlspecialchars($r['start_point'] ?? 'Start') ?> &rarr; <?= htmlspecialchars($r['end_point'] ?? 'End') ?>
+                                        <?= htmlspecialchars($driverRoute['description'] ?? 'Bus route') ?>
                                     </div>
                                 </div>
-                                <?php if (!empty($r['code'])): ?>
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-200 text-[10px]">
-                                    <?= htmlspecialchars($r['code']) ?>
-                                </span>
-                                <?php endif; ?>
                             </div>
                         </div>
-                        <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
             </div>
@@ -305,12 +266,10 @@ if ($driverId && $schoolId && $hasAssignments) {
                             <select name="student_id"
                                     class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
                                 <option value="">Select student</option>
-                                <?php foreach ($assignedStudents as $rid => $info): ?>
-                                    <?php foreach ($info['students'] as $s): ?>
-                                        <option value="<?= (int) $s['student_id'] ?>">
-                                            <?= htmlspecialchars($s['first_name'] . ' ' . $s['last_name']) ?> (Route <?= htmlspecialchars($info['route']['name'] ?? ('#' . $rid)) ?>)
-                                        </option>
-                                    <?php endforeach; ?>
+                                <?php foreach ($assignedStudents as $s): ?>
+                                    <option value="<?= (int) $s['id'] ?>">
+                                        <?= htmlspecialchars($s['first_name'] . ' ' . $s['last_name']) ?>
+                                    </option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -319,9 +278,9 @@ if ($driverId && $schoolId && $hasAssignments) {
                             <select name="route_id"
                                     class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
                                 <option value="">Select route</option>
-                                <?php foreach ($routesForDriver as $rid => $r): ?>
-                                    <option value="<?= (int) $rid ?>"><?= htmlspecialchars($r['name']) ?></option>
-                                <?php endforeach; ?>
+                                <?php if ($driverRoute): ?>
+                                    <option value="<?= (int) $driverRoute['id'] ?>"><?= htmlspecialchars($driverRoute['route_name']) ?></option>
+                                <?php endif; ?>
                             </select>
                         </div>
                         <div>
