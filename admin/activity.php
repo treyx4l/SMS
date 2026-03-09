@@ -40,7 +40,7 @@ foreach ($queries as $q) {
 usort($activities, fn($a,$b) => strtotime($b['time']) - strtotime($a['time']));
 
 // Basic server-side pagination (within the recent window above)
-$perPage    = 20;
+$perPage    = 10;
 $page       = max(1, (int) ($_GET['page'] ?? 1));
 $totalRows  = count($activities);
 $totalPages = $totalRows ? (int) ceil($totalRows / $perPage) : 1;

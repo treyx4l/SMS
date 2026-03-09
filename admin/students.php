@@ -215,7 +215,7 @@ $searchQ = trim($_GET['q'] ?? '');
 $searchParam = $searchQ !== '' ? '%' . $searchQ . '%' : null;
 
 // Pagination
-$perPage = 15;
+$perPage = 10;
 $page = max(1, (int)($_GET['page'] ?? 1));
 $offset = ($page - 1) * $perPage;
 

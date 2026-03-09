@@ -109,7 +109,6 @@ function navLink(string $check, string $current): string {
             <div>
                 <div class="text-base font-bold text-slate-900 tracking-tight"><?= htmlspecialchars(strtoupper($schoolName)) ?></div>
                 <div class="text-[10px] font-semibold text-indigo-600 uppercase tracking-widest mt-0.5">Admin Console</div>
-                <div class="text-[10px] text-slate-400 mt-0.5">Limit: 25 users</div>
             </div>
         </div>
 
