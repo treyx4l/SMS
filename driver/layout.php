@@ -38,8 +38,8 @@ $page_title = $page_title ?? 'Driver';
     <style>:root { --accent: <?= htmlspecialchars($schoolAccent) ?>; } .bg-indigo-600, .text-indigo-700 { background-color: var(--accent) !important; } .text-indigo-700 { color: var(--accent) !important; } .bg-indigo-50 { background-color: color-mix(in srgb, var(--accent) 15%, white) !important; }</style>
 </head>
 <body class="bg-gray-50 text-slate-900 min-h-screen">
-<div class="flex min-h-screen">
-    <aside class="w-56 bg-white border-r border-slate-200 p-4">
+<div class="flex flex-col md:flex-row min-h-screen">
+    <aside class="w-full md:w-56 bg-white border-b md:border-b-0 md:border-r border-slate-200 p-4">
         <div class="flex items-center gap-2">
             <?php if ($schoolLogoPath && file_exists(dirname(__DIR__) . '/' . $schoolLogoPath)): ?>
             <img src="../<?= htmlspecialchars($schoolLogoPath) ?>" alt="" class="w-9 h-9 rounded-lg object-contain shrink-0">
@@ -56,5 +56,5 @@ $page_title = $page_title ?? 'Driver';
             <button type="submit" class="w-full px-3 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Logout</button>
         </form>
     </aside>
-    <main class="flex-1 p-6 overflow-y-auto">
-        <h1 class="text-lg font-bold text-slate-900 mb-4"><?= htmlspecialchars($page_title) ?></h1>
+    <main class="w-full flex-1 p-4 md:p-6 overflow-y-auto">
+        <h1 class="text-lg md:text-xl font-bold text-slate-900 mb-4"><?= htmlspecialchars($page_title) ?></h1>
