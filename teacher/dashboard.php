@@ -293,35 +293,37 @@ if ($teacherId && $schoolId) {
 <div class="bg-white border border-slate-200 rounded-xl overflow-hidden mb-4">
     <div class="flex items-center justify-between gap-2.5 px-5 py-3.5 border-b border-slate-100">
         <div class="flex items-center gap-2.5">
-            <i data-lucide="bar-chart-2" class="w-4 h-4 text-emerald-600"></i>
-            <span class="text-sm font-semibold text-slate-800">Today at a glance</span>
+            <div class="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                <i data-lucide="bar-chart-2" class="w-4 h-4 text-emerald-600"></i>
+            </div>
+            <span class="text-base font-bold text-slate-800">Today at a glance</span>
         </div>
-        <span class="text-[11px] text-slate-400">
+        <span class="text-sm text-slate-400">
             Data shown is scoped to your assigned classes and subjects.
         </span>
     </div>
     <div class="grid grid-cols-2 md:grid-cols-4 divide-x divide-slate-100">
         <div class="px-5 py-4">
-            <div class="text-xs text-slate-500 mb-1.5">Classes assigned</div>
+            <div class="text-sm font-medium text-slate-500 mb-1.5">Classes assigned</div>
             <div class="text-2xl md:text-3xl font-bold text-emerald-600 mb-0.5"><?= $classesAssigned ?></div>
-            <div class="text-[11px] text-slate-400">Total homeroom + subject classes</div>
+            <div class="text-sm text-slate-400">Total classes</div>
         </div>
         <div class="px-5 py-4">
-            <div class="text-xs text-slate-500 mb-1.5">Lessons today</div>
+            <div class="text-sm font-medium text-slate-500 mb-1.5">Lessons today</div>
             <div class="text-2xl md:text-3xl font-bold text-indigo-600 mb-0.5"><?= $lessonsToday ?></div>
-            <div class="text-[11px] text-slate-400">Periods on today’s timetable</div>
+            <div class="text-sm text-slate-400">Periods today</div>
         </div>
         <div class="px-5 py-4">
-            <div class="text-xs text-slate-500 mb-1.5">Attendance marked</div>
+            <div class="text-sm font-medium text-slate-500 mb-1.5">Attendance marked</div>
             <div class="text-2xl md:text-3xl font-bold text-amber-500 mb-0.5">
                 <?= $lessonsToday > 0 ? $attendanceMarked . '/' . $lessonsToday : $attendanceMarked ?>
             </div>
-            <div class="text-[11px] text-slate-400">Classes with completed attendance today</div>
+            <div class="text-sm text-slate-400">Classes completed</div>
         </div>
         <div class="px-5 py-4">
-            <div class="text-xs text-slate-500 mb-1.5">Students without grades yet</div>
+            <div class="text-sm font-medium text-slate-500 mb-1.5">Pending grades</div>
             <div class="text-2xl md:text-3xl font-bold text-rose-500 mb-0.5"><?= $gradingPending ?></div>
-            <div class="text-[11px] text-slate-400">Across your assigned classes/subjects</div>
+            <div class="text-sm text-slate-400">Students without grades</div>
         </div>
     </div>
 </div>
@@ -333,68 +335,68 @@ if ($teacherId && $schoolId) {
         <!-- Teaching workspace quick actions -->
         <div class="bg-white border border-slate-200 rounded-xl p-5">
             <div class="flex items-center justify-between mb-4">
-                <h2 class="text-sm font-semibold text-slate-800">Your teaching workspace</h2>
-                <span class="text-[11px] text-slate-400">Jump into the most common tasks</span>
+                <h2 class="text-base font-bold text-slate-800">Your teaching workspace</h2>
+                <span class="text-sm text-slate-400">Jump into the most common tasks</span>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                 <a href="classes.php"
                    class="flex items-center gap-2.5 px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 transition-colors">
                     <i data-lucide="book-open" class="w-4 h-4 shrink-0"></i>
                     <div class="flex flex-col">
-                        <span>Classes assigned to me</span>
-                        <span class="text-[10px] text-slate-400">See all classes, streams &amp; shortcuts</span>
+                        <span class="font-medium">Classes assigned to me</span>
+                        <span class="text-xs text-slate-400 mt-0.5">See all classes &amp; shortcuts</span>
                     </div>
                 </a>
                 <a href="timetable.php"
                    class="flex items-center gap-2.5 px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-700 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 transition-colors">
                     <i data-lucide="calendar" class="w-4 h-4 shrink-0"></i>
                     <div class="flex flex-col">
-                        <span>View my timetable</span>
-                        <span class="text-[10px] text-slate-400">See periods for the week</span>
+                        <span class="font-medium">View my timetable</span>
+                        <span class="text-xs text-slate-400 mt-0.5">See periods for the week</span>
                     </div>
                 </a>
                 <a href="attendance.php"
                    class="flex items-center gap-2.5 px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-700 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 transition-colors">
                     <i data-lucide="calendar-check" class="w-4 h-4 shrink-0"></i>
                     <div class="flex flex-col">
-                        <span>Record student attendance</span>
-                        <span class="text-[10px] text-slate-400">Mark present / late / absent</span>
+                        <span class="font-medium">Record student attendance</span>
+                        <span class="text-xs text-slate-400 mt-0.5">Mark present / late / absent</span>
                     </div>
                 </a>
                 <a href="subjects.php"
                    class="flex items-center gap-2.5 px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 transition-colors">
                     <i data-lucide="layers" class="w-4 h-4 shrink-0"></i>
                     <div class="flex flex-col">
-                        <span>Subjects I teach</span>
-                        <span class="text-[10px] text-slate-400">Per level, stream &amp; core/elective</span>
+                        <span class="font-medium">Subjects I teach</span>
+                        <span class="text-xs text-slate-400 mt-0.5">Per level &amp; stream</span>
                     </div>
                 </a>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px]">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                 <a href="grades.php"
                    class="flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 hover:border-violet-300 hover:bg-violet-50 hover:text-violet-800">
                     <div class="flex flex-col">
-                        <span class="font-medium text-slate-700">Enter / review grades</span>
-                        <span class="text-[10px] text-slate-400">Assignments, tests &amp; exams</span>
+                        <span class="font-semibold text-slate-700">Enter / review grades</span>
+                        <span class="text-xs text-slate-400 mt-0.5">Assignments, tests &amp; exams</span>
                     </div>
-                    <i data-lucide="clipboard-list" class="w-3 h-3 shrink-0"></i>
+                    <i data-lucide="clipboard-list" class="w-4 h-4 shrink-0 text-violet-500"></i>
                 </a>
                 <a href="lesson_notes.php"
                    class="flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800">
                     <div class="flex flex-col">
-                        <span class="font-medium text-slate-700">Prepare lesson notes</span>
-                        <span class="text-[10px] text-slate-400">Draft, submit &amp; track status</span>
+                        <span class="font-semibold text-slate-700">Prepare lesson notes</span>
+                        <span class="text-xs text-slate-400 mt-0.5">Draft, submit &amp; track status</span>
                     </div>
-                    <i data-lucide="file-text" class="w-3 h-3 shrink-0"></i>
+                    <i data-lucide="file-text" class="w-4 h-4 shrink-0 text-amber-500"></i>
                 </a>
                 <a href="analytics.php"
                    class="flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800">
                     <div class="flex flex-col">
-                        <span class="font-medium text-slate-700">View analytics</span>
-                        <span class="text-[10px] text-slate-400">Performance &amp; attendance trends</span>
+                        <span class="font-semibold text-slate-700">View analytics</span>
+                        <span class="text-xs text-slate-400 mt-0.5">Performance &amp; attendance trends</span>
                     </div>
-                    <i data-lucide="activity" class="w-3 h-3 shrink-0"></i>
+                    <i data-lucide="activity" class="w-4 h-4 shrink-0 text-emerald-500"></i>
                 </a>
             </div>
         </div>
@@ -402,10 +404,10 @@ if ($teacherId && $schoolId) {
         <!-- Open items (overview text, data-backed hint) -->
         <div class="bg-white border border-slate-200 rounded-xl p-5">
             <div class="flex items-center justify-between mb-3">
-                <h2 class="text-sm font-semibold text-slate-800">Open items (overview)</h2>
-                <span class="text-[11px] text-slate-400">Based on your classes and timetable</span>
+                <h2 class="text-base font-bold text-slate-800">Open items (overview)</h2>
+                <span class="text-sm text-slate-400">Based on your classes and timetable</span>
             </div>
-            <p class="text-[11px] text-slate-500">
+            <p class="text-sm text-slate-500 leading-relaxed">
                 You currently have <strong><?= $gradingPending ?></strong> student<?= $gradingPending === 1 ? '' : 's' ?> across your classes
                 without any recorded grade yet. Use the grading workspace to capture scores for recent tests and exams.
             </p>
@@ -416,24 +418,24 @@ if ($teacherId && $schoolId) {
     <div class="space-y-4">
         <!-- Today’s timetable -->
         <div class="bg-white border border-slate-200 rounded-xl p-5">
-            <div class="flex items-center justify-between mb-3">
-                <h2 class="text-sm font-semibold text-slate-800">Today&rsquo;s timetable</h2>
-                <a href="timetable.php" class="text-[11px] text-emerald-600 hover:text-emerald-700 font-medium">View full</a>
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-base font-bold text-slate-800">Today&rsquo;s timetable</h2>
+                <a href="timetable.php" class="text-sm text-emerald-600 hover:text-emerald-700 font-medium">View full</a>
             </div>
             <?php if (empty($todaySchedule)): ?>
-            <p class="text-[11px] text-slate-500">
+            <p class="text-sm text-slate-500">
                 You have no scheduled periods on the timetable for today.
             </p>
             <?php else: ?>
-            <div class="space-y-2 text-[11px]">
+            <div class="space-y-3">
                 <?php foreach ($todaySchedule as $slot): ?>
-                <div class="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
+                <div class="flex items-center justify-between rounded-lg border border-slate-100 px-4 py-3 bg-slate-50/50">
                     <div>
-                        <div class="font-semibold text-slate-800">
+                        <div class="font-bold text-slate-800 text-sm mb-0.5">
                             Period <?= (int) $slot['period_order'] ?>
                         </div>
-                        <div class="text-[10px] text-slate-500">
-                            <?= htmlspecialchars($slot['subject_name'] ?? 'Subject') ?>
+                        <div class="text-xs text-slate-500">
+                            <span class="font-medium text-slate-600"><?= htmlspecialchars($slot['subject_name'] ?? 'Subject') ?></span>
                             &middot;
                             <?= htmlspecialchars(($slot['class_name'] ?? 'Class') . (!empty($slot['class_section']) ? ' ' . $slot['class_section'] : '')) ?>
                         </div>
@@ -446,25 +448,25 @@ if ($teacherId && $schoolId) {
 
         <!-- Subjects quick summary -->
         <div class="bg-white border border-slate-200 rounded-xl p-5">
-            <div class="flex items-center justify-between mb-3">
-                <h2 class="text-sm font-semibold text-slate-800">Subjects you teach</h2>
-                <a href="subjects.php" class="text-[11px] text-emerald-600 hover:text-emerald-700 font-medium">View all</a>
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-base font-bold text-slate-800">Subjects you teach</h2>
+                <a href="subjects.php" class="text-sm text-emerald-600 hover:text-emerald-700 font-medium">View all</a>
             </div>
             <?php if (empty($subjectsSummary)): ?>
-            <p class="text-[11px] text-slate-500">
+            <p class="text-sm text-slate-500">
                 No subjects have been linked to your account yet.
             </p>
             <?php else: ?>
-            <div class="space-y-1.5 text-[11px]">
+            <div class="space-y-2.5">
                 <?php foreach ($subjectsSummary as $s): ?>
-                <div class="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-1.5">
+                <div class="flex items-center justify-between rounded-lg border border-slate-100 px-4 py-2.5 bg-slate-50/50">
                     <div>
-                        <div class="font-medium text-slate-800"><?= htmlspecialchars($s['name']) ?></div>
-                        <div class="text-[10px] text-slate-500">
+                        <div class="font-semibold text-slate-800 text-sm mb-0.5"><?= htmlspecialchars($s['name']) ?></div>
+                        <div class="text-xs text-slate-500">
                             <?= $s['classes'] ? htmlspecialchars(implode(', ', $s['classes'])) : 'Class assignments via timetable' ?>
                         </div>
                     </div>
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px]">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-medium">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                         Subject
                     </span>
@@ -476,14 +478,14 @@ if ($teacherId && $schoolId) {
 
         <!-- Reports & analytics overview -->
         <div class="bg-white border border-slate-200 rounded-xl p-5">
-            <div class="flex items-center justify-between mb-2">
-                <h2 class="text-sm font-semibold text-slate-800">Reports &amp; analytics</h2>
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-base font-bold text-slate-800">Reports &amp; analytics</h2>
                 <div class="flex items-center gap-3">
-                    <a href="reports.php" class="text-[11px] text-emerald-600 hover:text-emerald-700 font-medium">Open reports</a>
-                    <a href="analytics.php" class="text-[11px] text-slate-500 hover:text-slate-700">View analytics</a>
+                    <a href="reports.php" class="text-sm text-emerald-600 hover:text-emerald-700 font-medium">Open reports</a>
+                    <a href="analytics.php" class="text-sm text-slate-500 hover:text-slate-700 font-medium">View analytics</a>
                 </div>
             </div>
-            <p class="text-[11px] text-slate-500 mb-1">
+            <p class="text-sm text-slate-500 mb-1 leading-relaxed">
                 Use reports and analytics to review attendance and performance trends for your assigned classes only.
             </p>
         </div>

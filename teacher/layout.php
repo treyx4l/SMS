@@ -236,28 +236,28 @@ function teacherNavLink(string $check, string $current): string
                         <span id="teacherNotifBadge" class="hidden absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[9px] font-semibold"></span>
                     </button>
                     <div id="teacherNotificationsMenu"
-                         class="hidden absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl py-1 text-[11px] text-slate-700 z-50">
-                        <div class="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
-                            <span class="text-[11px] font-semibold text-slate-800">Notifications</span>
-                            <button id="teacherMarkAllRead" class="text-[10px] text-emerald-600 hover:text-emerald-700">Mark all read</button>
+                         class="hidden absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl py-1 text-sm text-slate-700 z-50">
+                        <div class="px-4 py-2 border-b border-slate-100 flex items-center justify-between">
+                            <span class="text-sm font-bold text-slate-800">Notifications</span>
+                            <button id="teacherMarkAllRead" class="text-xs text-emerald-600 hover:text-emerald-700 font-medium">Mark all read</button>
                         </div>
                         <!-- Group 1: Parents · Staff · Admin -->
-                        <div class="px-3 pt-2 pb-0.5 text-[10px] uppercase tracking-wide text-slate-400 flex items-center gap-1">
-                            <i data-lucide="users" class="w-2.5 h-2.5"></i><span>Parents &middot; Staff &middot; Admin</span>
+                        <div class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                            <i data-lucide="users" class="w-3 h-3"></i><span>Parents &middot; Staff &middot; Admin</span>
                         </div>
                         <div id="teacherNotifGroup1"></div>
                         <!-- Group 2: Staff & Admin -->
-                        <div class="px-3 pt-2 pb-0.5 text-[10px] uppercase tracking-wide text-slate-400 flex items-center gap-1">
-                            <i data-lucide="shield" class="w-2.5 h-2.5"></i><span>Staff &amp; Admin</span>
+                        <div class="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                            <i data-lucide="shield" class="w-3 h-3"></i><span>Staff &amp; Admin</span>
                         </div>
                         <div id="teacherNotifGroup2"></div>
-                        <div class="border-t border-slate-100 mt-1 pt-1 flex items-center justify-between">
-                            <button type="button" id="teacherClearAll" class="px-3 py-1.5 text-[10px] font-medium text-slate-500 hover:text-slate-800 transition-colors">
+                        <div class="border-t border-slate-100 mt-2 pt-1 flex items-center justify-between">
+                            <button type="button" id="teacherClearAll" class="px-4 py-2 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors">
                                 Clear notifications
                             </button>
-                            <a href="analytics.php" class="flex items-center gap-1 px-3 py-1.5 hover:bg-slate-50 text-[11px] text-slate-600">
+                            <a href="analytics.php" class="flex items-center gap-1 px-4 py-2 hover:bg-slate-50 text-sm text-slate-600 font-medium">
                                 <span>View insights</span>
-                                <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                                <i data-lucide="arrow-right" class="w-4 h-4"></i>
                             </a>
                         </div>
                     </div>
@@ -267,40 +267,40 @@ function teacherNavLink(string $check, string $current): string
                 <div class="relative">
                     <button type="button"
                             id="teacherProfileButton"
-                            class="flex items-center gap-2 rounded-full pl-2 pr-1.5 py-1.5 hover:bg-slate-50 focus:outline-none">
-                        <div class="hidden sm:flex flex-col items-end mr-1">
-                            <span class="text-xs font-medium text-slate-700 leading-tight">
+                            class="flex items-center gap-2 rounded-full pl-3 pr-2 py-2 hover:bg-slate-50 focus:outline-none transition-colors">
+                        <div class="hidden sm:flex flex-col items-end mr-2">
+                            <span class="text-sm font-semibold text-slate-700 leading-tight">
                                 <?= htmlspecialchars($teacherName) ?>
                             </span>
-                            <span class="text-[10px] text-slate-400 leading-tight">
+                            <span class="text-xs text-slate-500 leading-tight mt-0.5">
                                 <?= htmlspecialchars($schoolName) ?>
                             </span>
                         </div>
-                        <div class="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-semibold"
+                        <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-sm font-bold shadow-sm"
                              title="Account">
                             <?= htmlspecialchars($teacherInitial) ?>
                         </div>
-                        <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400"></i>
+                        <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400"></i>
                     </button>
 
                     <!-- Dropdown menu -->
                     <div id="teacherProfileMenu"
-                         class="hidden absolute right-0 mt-2 w-40 bg-white border border-slate-200 rounded-xl shadow-lg py-1 text-[11px] text-slate-700 z-20">
+                         class="hidden absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 text-sm text-slate-700 z-20">
                         <a href="profile.php"
-                           class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50">
-                            <i data-lucide="user" class="w-3 h-3"></i>
-                            <span>Profile</span>
+                           class="flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 transition-colors">
+                            <i data-lucide="user" class="w-4 h-4"></i>
+                            <span class="font-medium">Profile</span>
                         </a>
                         <a href="edit_profile.php"
-                           class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50">
-                            <i data-lucide="edit-3" class="w-3 h-3"></i>
-                            <span>Edit profile</span>
+                           class="flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 transition-colors">
+                            <i data-lucide="edit-3" class="w-4 h-4"></i>
+                            <span class="font-medium">Edit profile</span>
                         </a>
                         <div class="my-1 border-t border-slate-100"></div>
                         <form method="post" action="../logout.php">
                             <button type="submit"
-                                    class="w-full flex items-center gap-2 px-3 py-1.5 text-rose-600 hover:bg-rose-50">
-                                <i data-lucide="log-out" class="w-3 h-3"></i>
+                                    class="w-full flex items-center gap-2.5 px-4 py-2 text-rose-600 hover:bg-rose-50 font-medium transition-colors">
+                                <i data-lucide="log-out" class="w-4 h-4"></i>
                                 <span>Sign out</span>
                             </button>
                         </form>
