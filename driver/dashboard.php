@@ -219,21 +219,36 @@ if ($driverRoute) {
                     </div>
                     <div class="divide-y divide-slate-100">
                         <?php foreach ($assignedStudents as $i => $s): ?>
-                        <div class="flex items-center justify-between gap-3 px-5 py-3.5 hover:bg-slate-50 transition-colors">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 hover:bg-slate-50 transition-colors">
                             <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center text-sm font-bold shrink-0">
+                                <div class="w-10 h-10 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center text-sm font-bold shrink-0">
                                     <?= strtoupper(mb_substr($s['first_name'], 0, 1)) ?>
                                 </div>
-                                <div>
-                                    <div class="text-sm font-semibold text-slate-800"><?= htmlspecialchars($s['first_name'] . ' ' . $s['last_name']) ?></div>
-                                    <div class="text-xs text-slate-400">Student #<?= (int) $s['id'] ?></div>
+                                <div class="flex flex-col">
+                                    <div class="flex items-center gap-2">
+                                        <div class="text-sm font-semibold text-slate-800"><?= htmlspecialchars($s['first_name'] . ' ' . $s['last_name']) ?></div>
+                                        <?php if ($i % 5 === 0): /* Mock medical alert for some students */ ?>
+                                            <div class="group relative flex items-center justify-center cursor-help">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-rose-500"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9M19.1 4.9c3.9 3.9 3.9 10.3 0 14.2"/><path d="M14.6 14.6c1.6-1.6 1.6-4.2 0-5.8M9.4 9.4c-1.6 1.6-1.6 4.2 0 5.8"/><path d="M12 12v.01"/></svg>
+                                                <div class="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden md:block w-max bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-lg pointer-events-none z-10">Medical Alert: Peanut Allergy</div>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
+                                        <span>Student #<?= (int) $s['id'] ?></span>
+                                        <span>&bull;</span>
+                                        <div class="flex items-center gap-1">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                                            <a href="tel:5550123" class="hover:text-emerald-600 hover:underline">(555) 0123</a>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-2">
-                                <button type="button" class="px-3 py-1.5 rounded-lg border border-emerald-200 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors">
+                            <div class="flex items-center gap-2 sm:ml-auto pl-12 sm:pl-0 mt-2 sm:mt-0">
+                                <button type="button" class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg border border-emerald-200 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors shadow-sm">
                                     Present
                                 </button>
-                                <button type="button" class="px-3 py-1.5 rounded-lg border border-rose-200 text-xs font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors">
+                                <button type="button" class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg border border-rose-200 text-xs font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors shadow-sm">
                                     Absent
                                 </button>
                             </div>
@@ -248,25 +263,68 @@ if ($driverRoute) {
         <div class="flex flex-col gap-5">
             <!-- My Route -->
             <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-                <div class="flex items-center gap-2 mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-500"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
-                    <h3 class="text-sm font-bold text-slate-800">My Route</h3>
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-500"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
+                        <h3 class="text-sm font-bold text-slate-800">My Route Details</h3>
+                    </div>
+                    <?php if ($driverRoute): ?>
+                        <a href="#" class="text-xs font-medium text-emerald-600 hover:text-emerald-700">View Map</a>
+                    <?php endif; ?>
                 </div>
                 <?php if (!$driverRoute): ?>
                     <div class="text-center py-6 border border-dashed border-slate-200 rounded-xl bg-slate-50">
                         <p class="text-xs text-slate-500">No route assigned yet.</p>
                     </div>
                 <?php else: ?>
-                    <div class="border border-slate-200 rounded-xl p-4 bg-slate-50">
-                        <div class="text-sm font-bold text-slate-800 mb-1"><?= htmlspecialchars($driverRoute['route_name']) ?></div>
-                        <div class="text-xs text-slate-500"><?= htmlspecialchars($driverRoute['description'] ?? 'Bus route') ?></div>
-                        <div class="flex items-center gap-1.5 mt-3">
-                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                            <span class="text-xs text-emerald-600 font-medium">Active</span>
+                    <div class="border border-slate-200 rounded-xl overflow-hidden">
+                        <div class="p-4 bg-slate-50 border-b border-slate-200">
+                            <div class="text-sm font-bold text-slate-800 mb-1"><?= htmlspecialchars($driverRoute['route_name']) ?></div>
+                            <div class="text-xs text-slate-500"><?= htmlspecialchars($driverRoute['description'] ?? 'Morning Pickup Route') ?></div>
+                            <div class="flex items-center gap-1.5 mt-3">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                <span class="text-xs text-emerald-600 font-medium">Active · 12 Stops</span>
+                            </div>
+                        </div>
+                        <div class="p-4 bg-white">
+                            <h4 class="text-xs font-semibold text-slate-600 mb-3 uppercase tracking-wider">Upcoming Stops</h4>
+                            <div class="relative pl-4 space-y-4 border-l-2 border-slate-100 ml-2">
+                                <div class="relative">
+                                    <div class="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-emerald-500 ring-4 ring-white"></div>
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="text-sm font-medium text-slate-800">Stop 1: Oak St & 4th Ave</p>
+                                            <p class="text-xs text-slate-500">3 Students boarding</p>
+                                        </div>
+                                        <span class="text-xs font-bold text-slate-700">07:15 AM</span>
+                                    </div>
+                                </div>
+                                <div class="relative">
+                                    <div class="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-slate-300 ring-4 ring-white"></div>
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="text-sm font-medium text-slate-700">Stop 2: Maple Dr & Park Rd</p>
+                                            <p class="text-xs text-slate-500">5 Students boarding</p>
+                                        </div>
+                                        <span class="text-xs font-semibold text-slate-600">07:25 AM</span>
+                                    </div>
+                                </div>
+                                <div class="relative">
+                                    <div class="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-slate-300 ring-4 ring-white"></div>
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="text-sm font-medium text-slate-700">School Arrival</p>
+                                            <p class="text-xs text-slate-500">Drop-off</p>
+                                        </div>
+                                        <span class="text-xs font-semibold text-slate-600">08:00 AM</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 <?php endif; ?>
             </div>
+
 
             <!-- Report Incident -->
             <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex-1">

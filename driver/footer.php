@@ -53,5 +53,6 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
 </div>
 
+<?php include dirname(__DIR__) . '/includes/footer_scripts.php'; ?>
 </body>
 </html>
