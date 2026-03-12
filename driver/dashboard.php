@@ -117,166 +117,196 @@ if ($driverRoute) {
 }
 ?>
 
-<div class="space-y-4">
-    <!-- KPI strip -->
-    <div class="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-            <div>
-                <h2 class="text-sm font-semibold text-slate-800">Bus Driver Portal</h2>
-                <p class="text-[11px] text-slate-500">
-                    View your assigned students, routes, and record attendance or incidents.
-                </p>
-            </div>
-            <div class="flex flex-wrap gap-2 text-[11px]">
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    Today: <?= htmlspecialchars($today) ?>
-                </span>
-            </div>
-        </div>
+<div class="space-y-6">
 
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div class="border border-slate-100 rounded-lg px-3 py-3">
-                <div class="text-xs text-slate-500 mb-1">Routes assigned</div>
-                <div class="text-xl font-bold text-emerald-600"><?= $driverRoute ? 1 : 0 ?></div>
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Route -->
+        <div class="bg-white border border-slate-200 rounded-xl p-5 flex items-start gap-4 shadow-sm">
+            <div class="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-600"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
             </div>
-            <div class="border border-slate-100 rounded-lg px-3 py-3">
-                <div class="text-xs text-slate-500 mb-1">Students on manifest</div>
-                <div class="text-xl font-bold text-sky-600"><?= count($assignedStudents) ?></div>
-            </div>
-            <div class="border border-slate-100 rounded-lg px-3 py-3">
-                <div class="text-xs text-slate-500 mb-1">Misconduct reports</div>
-                <div class="text-xl font-bold text-amber-500">–</div>
-            </div>
-            <div class="border border-slate-100 rounded-lg px-3 py-3">
-                <div class="text-xs text-slate-500 mb-1">Absent marked today</div>
-                <div class="text-xl font-bold text-rose-500">–</div>
+            <div>
+                <div class="text-2xl font-bold text-slate-800"><?= $driverRoute ? 1 : 0 ?></div>
+                <div class="text-sm font-medium text-slate-500 mt-0.5">Routes assigned</div>
             </div>
         </div>
-        <?php if (!$driverRoute): ?>
-            <p class="mt-3 text-[11px] text-amber-700">
-                No bus route is assigned to your driver profile yet. Ask the admin to link you to a route so your manifest appears here.
-            </p>
-        <?php endif; ?>
+        <!-- Students -->
+        <div class="bg-white border border-slate-200 rounded-xl p-5 flex items-start gap-4 shadow-sm">
+            <div class="w-11 h-11 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-sky-600"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div>
+                <div class="text-2xl font-bold text-slate-800"><?= count($assignedStudents) ?></div>
+                <div class="text-sm font-medium text-slate-500 mt-0.5">Students on manifest</div>
+            </div>
+        </div>
+        <!-- Incidents -->
+        <div class="bg-white border border-slate-200 rounded-xl p-5 flex items-start gap-4 shadow-sm">
+            <div class="w-11 h-11 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-600"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+            </div>
+            <div>
+                <div class="text-2xl font-bold text-slate-800"><?= $hasMisconducts ? '0' : '–' ?></div>
+                <div class="text-sm font-medium text-slate-500 mt-0.5">Incidents reported</div>
+            </div>
+        </div>
+        <!-- Today's date -->
+        <div class="bg-white border border-slate-200 rounded-xl p-5 flex items-start gap-4 shadow-sm">
+            <div class="w-11 h-11 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-500"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+            </div>
+            <div>
+                <div class="text-base font-bold text-slate-800"><?= date('d M Y') ?></div>
+                <div class="text-sm font-medium text-slate-500 mt-0.5">Today's date</div>
+            </div>
+        </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <!-- Manifest (students assigned to bus) -->
-        <div class="lg:col-span-2 bg-white border border-slate-200 rounded-xl flex flex-col">
-            <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                <span class="text-xs font-semibold text-slate-800">Today’s manifest</span>
-                <span class="text-[11px] text-slate-400">Students assigned to your bus routes.</span>
+    <?php if (!$driverRoute): ?>
+    <div class="flex items-start gap-3 bg-amber-50 border border-amber-200 p-4 rounded-xl">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-600 mt-0.5 shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+        <p class="text-sm text-amber-700">No bus route is assigned to your driver profile yet. Ask the administrator to link you to a route so your manifest appears here.</p>
+    </div>
+    <?php endif; ?>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <!-- Manifest -->
+        <div class="lg:col-span-2 bg-white border border-slate-200 rounded-xl flex flex-col shadow-sm">
+            <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-sky-500"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>
+                    <span class="text-base font-bold text-slate-800">Today's Manifest</span>
+                </div>
+                <?php if ($driverRoute): ?>
+                <span class="text-xs font-medium px-2.5 py-1 bg-sky-50 text-sky-600 rounded-lg border border-sky-100"><?= count($assignedStudents) ?> students</span>
+                <?php endif; ?>
             </div>
-            <div class="p-4 space-y-3 overflow-y-auto max-h-[420px]">
+            <div class="flex-1 overflow-y-auto max-h-[500px]">
                 <?php if (!$driverId): ?>
-                    <p class="text-[11px] text-amber-700">
-                        Your login is not linked to a bus driver record. Contact the admin to fix this mapping.
-                    </p>
+                    <div class="flex flex-col items-center justify-center text-center p-10">
+                        <div class="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center mb-3 border border-amber-100">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-500"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+                        </div>
+                        <p class="text-sm font-bold text-slate-700 mb-1">Account Not Linked</p>
+                        <p class="text-xs text-slate-500 max-w-xs">Your login is not linked to a driver record. Contact the admin to fix this mapping.</p>
+                    </div>
                 <?php elseif (!$driverRoute): ?>
-                    <p class="text-[11px] text-slate-500">
-                        No route is currently linked to you. Once the admin assigns you a bus route, you will see your manifest here.
-                    </p>
+                    <div class="flex flex-col items-center justify-center text-center p-10">
+                        <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3 border border-slate-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-400"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
+                        </div>
+                        <p class="text-sm font-bold text-slate-700 mb-1">No Route Assigned</p>
+                        <p class="text-xs text-slate-500 max-w-xs">Once the admin assigns you a bus route, your student manifest will appear here.</p>
+                    </div>
                 <?php elseif (empty($assignedStudents)): ?>
-                    <p class="text-[11px] text-slate-500">
-                        No students are currently assigned to your route. Once students are linked to this route, they will appear here.
-                    </p>
+                    <div class="flex flex-col items-center justify-center text-center p-10">
+                        <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3 border border-slate-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-400"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                        </div>
+                        <p class="text-sm font-bold text-slate-700 mb-1">No Students on this Route</p>
+                        <p class="text-xs text-slate-500 max-w-xs">Students will appear here once they are linked to your route by the admin.</p>
+                    </div>
                 <?php else: ?>
-                    <div class="border border-slate-100 rounded-lg">
-                        <div class="px-3 py-2 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                    <div class="px-5 py-3 bg-slate-50 border-b border-slate-100">
+                        <div class="flex items-center justify-between">
                             <div>
-                                <div class="text-xs font-semibold text-slate-800">
-                                    <?= htmlspecialchars($driverRoute['route_name'] ?? ('Route #' . $driverRoute['id'])) ?>
-                                </div>
-                                <div class="text-[10px] text-slate-500">
-                                    <?= htmlspecialchars($driverRoute['description'] ?? 'Bus route') ?>
-                                </div>
+                                <div class="text-sm font-bold text-slate-800"><?= htmlspecialchars($driverRoute['route_name'] ?? ('Route #' . $driverRoute['id'])) ?></div>
+                                <div class="text-xs text-slate-500 mt-0.5"><?= htmlspecialchars($driverRoute['description'] ?? 'Bus route') ?></div>
                             </div>
+                            <span class="text-xs font-medium px-2.5 py-1 bg-white text-slate-600 rounded-lg border border-slate-200"><?= count($assignedStudents) ?> on board</span>
                         </div>
-                        <div class="p-3 space-y-1.5 text-[11px]">
-                            <?php foreach ($assignedStudents as $s): ?>
-                            <div class="flex items-center justify-between gap-2">
+                    </div>
+                    <div class="divide-y divide-slate-100">
+                        <?php foreach ($assignedStudents as $i => $s): ?>
+                        <div class="flex items-center justify-between gap-3 px-5 py-3.5 hover:bg-slate-50 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center text-sm font-bold shrink-0">
+                                    <?= strtoupper(mb_substr($s['first_name'], 0, 1)) ?>
+                                </div>
                                 <div>
-                                    <div class="font-medium text-slate-800">
-                                        <?= htmlspecialchars($s['first_name'] . ' ' . $s['last_name']) ?>
-                                    </div>
-                                </div>
-                                <div class="flex items-center gap-1.5">
-                                    <button type="button"
-                                            class="px-2 py-0.5 rounded-full border border-emerald-200 text-[10px] text-emerald-700 bg-emerald-50">
-                                        Present
-                                    </button>
-                                    <button type="button"
-                                            class="px-2 py-0.5 rounded-full border border-rose-200 text-[10px] text-rose-700 bg-rose-50">
-                                        Mark absent
-                                    </button>
+                                    <div class="text-sm font-semibold text-slate-800"><?= htmlspecialchars($s['first_name'] . ' ' . $s['last_name']) ?></div>
+                                    <div class="text-xs text-slate-400">Student #<?= (int) $s['id'] ?></div>
                                 </div>
                             </div>
-                            <?php endforeach; ?>
+                            <div class="flex items-center gap-2">
+                                <button type="button" class="px-3 py-1.5 rounded-lg border border-emerald-200 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors">
+                                    Present
+                                </button>
+                                <button type="button" class="px-3 py-1.5 rounded-lg border border-rose-200 text-xs font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors">
+                                    Absent
+                                </button>
+                            </div>
                         </div>
+                        <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
             </div>
         </div>
 
-        <!-- Routes & misconduct reporting -->
-        <div class="space-y-4">
-            <div class="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
-                <h3 class="text-xs font-semibold text-slate-800 mb-2">My routes</h3>
+        <!-- Right column: My route + Incident reporting -->
+        <div class="flex flex-col gap-5">
+            <!-- My Route -->
+            <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                <div class="flex items-center gap-2 mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-500"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
+                    <h3 class="text-sm font-bold text-slate-800">My Route</h3>
+                </div>
                 <?php if (!$driverRoute): ?>
-                    <p class="text-[11px] text-slate-500">
-                        No routes are linked to you yet. When the admin sets up bus routes and assigns you as driver, they will be listed here.
-                    </p>
+                    <div class="text-center py-6 border border-dashed border-slate-200 rounded-xl bg-slate-50">
+                        <p class="text-xs text-slate-500">No route assigned yet.</p>
+                    </div>
                 <?php else: ?>
-                    <div class="space-y-2 text-[11px]">
-                        <div class="border border-slate-100 rounded-lg px-3 py-2">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <div class="font-medium text-slate-800"><?= htmlspecialchars($driverRoute['route_name']) ?></div>
-                                    <div class="text-[10px] text-slate-500">
-                                        <?= htmlspecialchars($driverRoute['description'] ?? 'Bus route') ?>
-                                    </div>
-                                </div>
-                            </div>
+                    <div class="border border-slate-200 rounded-xl p-4 bg-slate-50">
+                        <div class="text-sm font-bold text-slate-800 mb-1"><?= htmlspecialchars($driverRoute['route_name']) ?></div>
+                        <div class="text-xs text-slate-500"><?= htmlspecialchars($driverRoute['description'] ?? 'Bus route') ?></div>
+                        <div class="flex items-center gap-1.5 mt-3">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span class="text-xs text-emerald-600 font-medium">Active</span>
                         </div>
                     </div>
                 <?php endif; ?>
             </div>
 
-            <div class="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
-                <h3 class="text-xs font-semibold text-slate-800 mb-2">Report student misconduct</h3>
+            <!-- Report Incident -->
+            <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex-1">
+                <div class="flex items-center gap-2 mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-500"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+                    <h3 class="text-sm font-bold text-slate-800">Report Incident</h3>
+                </div>
                 <?php if (!$hasMisconducts): ?>
-                    <p class="text-[11px] text-amber-700">
-                        The student_misconducts table is not set up yet. Ask the admin to enable transport incident logging.
-                    </p>
+                    <div class="flex flex-col items-center justify-center text-center p-6 border border-dashed border-slate-200 rounded-xl bg-slate-50">
+                        <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mb-3 border border-slate-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-400"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+                        </div>
+                        <h4 class="text-sm font-bold text-slate-700 mb-1">Feature Not Enabled</h4>
+                        <p class="text-xs text-slate-500 max-w-xs">Transport incident logging hasn't been configured. Contact your system administrator to enable it.</p>
+                    </div>
                 <?php else: ?>
                     <?php if ($errors): ?>
-                        <div class="mb-2 px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg text-[11px] text-red-700">
+                        <div class="mb-3 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
                             <?= htmlspecialchars(implode(' ', $errors)) ?>
                         </div>
                     <?php endif; ?>
                     <?php if ($success): ?>
-                        <div class="mb-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg text-[11px] text-green-700">
+                        <div class="mb-3 px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-700">
                             <?= htmlspecialchars($success) ?>
                         </div>
                     <?php endif; ?>
-                    <form method="post" class="space-y-2 text-[11px]">
+                    <form method="post" class="space-y-3">
                         <input type="hidden" name="action" value="report_misconduct">
                         <div>
-                            <label class="block text-[11px] font-medium text-slate-600 mb-1">Student</label>
-                            <select name="student_id"
-                                    class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1.5">Student</label>
+                            <select name="student_id" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300">
                                 <option value="">Select student</option>
                                 <?php foreach ($assignedStudents as $s): ?>
-                                    <option value="<?= (int) $s['id'] ?>">
-                                        <?= htmlspecialchars($s['first_name'] . ' ' . $s['last_name']) ?>
-                                    </option>
+                                    <option value="<?= (int) $s['id'] ?>"><?= htmlspecialchars($s['first_name'] . ' ' . $s['last_name']) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
                         <div>
-                            <label class="block text-[11px] font-medium text-slate-600 mb-1">Route (optional)</label>
-                            <select name="route_id"
-                                    class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1.5">Route <span class="font-normal text-slate-400">(optional)</span></label>
+                            <select name="route_id" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300">
                                 <option value="">Select route</option>
                                 <?php if ($driverRoute): ?>
                                     <option value="<?= (int) $driverRoute['id'] ?>"><?= htmlspecialchars($driverRoute['route_name']) ?></option>
@@ -284,15 +314,15 @@ if ($driverRoute) {
                             </select>
                         </div>
                         <div>
-                            <label class="block text-[11px] font-medium text-slate-600 mb-1">Details</label>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1.5">Incident Details</label>
                             <textarea name="note" rows="3"
-                                      class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-700"
-                                      placeholder="Describe the incident briefly (e.g. repeated standing while bus is moving, fighting, vandalism)..."></textarea>
+                                      class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"
+                                      placeholder="Briefly describe what happened..."></textarea>
                         </div>
-                        <div class="flex items-center justify-end gap-2 pt-1">
-                            <button type="submit"
-                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-medium hover:bg-rose-700">
-                                Submit report
+                        <div class="flex justify-end pt-1">
+                            <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700 transition-colors shadow-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                                Submit Report
                             </button>
                         </div>
                     </form>

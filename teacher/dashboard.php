@@ -331,120 +331,110 @@ if ($teacherId && $schoolId) {
 <!-- Main content grid -->
 <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
     <!-- Teaching workspace & open items -->
-    <div class="xl:col-span-2 space-y-4">
-        <!-- Teaching workspace quick actions -->
-        <div class="bg-white border border-slate-200 rounded-xl p-5">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-base font-bold text-slate-800">Your teaching workspace</h2>
-                <span class="text-sm text-slate-400">Jump into the most common tasks</span>
+    <div class="xl:col-span-2 flex flex-col gap-4">
+        <!-- Open items (overview text, data-backed hint) -->
+        <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-3 border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="bell" class="w-5 h-5 text-amber-500"></i>
+                    <h2 class="text-lg font-bold text-slate-800">Needs attention</h2>
+                </div>
+                <span class="text-sm font-medium px-2.5 py-1 bg-slate-50 text-slate-500 rounded-lg border border-slate-200">Updates Overview</span>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                <a href="classes.php"
-                   class="flex items-center gap-2.5 px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 transition-colors">
-                    <i data-lucide="book-open" class="w-4 h-4 shrink-0"></i>
-                    <div class="flex flex-col">
-                        <span class="font-medium">Classes assigned to me</span>
-                        <span class="text-xs text-slate-400 mt-0.5">See all classes &amp; shortcuts</span>
-                    </div>
-                </a>
-                <a href="timetable.php"
-                   class="flex items-center gap-2.5 px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-700 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 transition-colors">
-                    <i data-lucide="calendar" class="w-4 h-4 shrink-0"></i>
-                    <div class="flex flex-col">
-                        <span class="font-medium">View my timetable</span>
-                        <span class="text-xs text-slate-400 mt-0.5">See periods for the week</span>
-                    </div>
-                </a>
-                <a href="attendance.php"
-                   class="flex items-center gap-2.5 px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-700 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 transition-colors">
-                    <i data-lucide="calendar-check" class="w-4 h-4 shrink-0"></i>
-                    <div class="flex flex-col">
-                        <span class="font-medium">Record student attendance</span>
-                        <span class="text-xs text-slate-400 mt-0.5">Mark present / late / absent</span>
-                    </div>
-                </a>
-                <a href="subjects.php"
-                   class="flex items-center gap-2.5 px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 transition-colors">
-                    <i data-lucide="layers" class="w-4 h-4 shrink-0"></i>
-                    <div class="flex flex-col">
-                        <span class="font-medium">Subjects I teach</span>
-                        <span class="text-xs text-slate-400 mt-0.5">Per level &amp; stream</span>
-                    </div>
-                </a>
+            <?php if ($gradingPending > 0): ?>
+            <div class="flex items-start gap-3 bg-rose-50 border border-rose-100 p-4 rounded-xl mt-4">
+                <i data-lucide="alert-circle" class="w-5 h-5 text-rose-500 mt-0.5 shrink-0"></i>
+                <div>
+                    <h3 class="text-sm font-bold text-rose-800 mb-1">Ungraded Students</h3>
+                    <p class="text-sm text-rose-600 leading-relaxed">
+                        You currently have <strong><?= $gradingPending ?></strong> student<?= $gradingPending === 1 ? '' : 's' ?> across your classes
+                        without any recorded grade yet. Use the grading workspace to capture scores.
+                    </p>
+                    <a href="grades.php" class="inline-flex mt-3 items-center gap-1.5 px-3 py-1.5 bg-rose-600 text-white text-xs font-semibold rounded-lg shadow-sm hover:bg-rose-700 transition">
+                        Enter Grades Now
+                    </a>
+                </div>
             </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                <a href="grades.php"
-                   class="flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 hover:border-violet-300 hover:bg-violet-50 hover:text-violet-800">
-                    <div class="flex flex-col">
-                        <span class="font-semibold text-slate-700">Enter / review grades</span>
-                        <span class="text-xs text-slate-400 mt-0.5">Assignments, tests &amp; exams</span>
-                    </div>
-                    <i data-lucide="clipboard-list" class="w-4 h-4 shrink-0 text-violet-500"></i>
-                </a>
-                <a href="lesson_notes.php"
-                   class="flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800">
-                    <div class="flex flex-col">
-                        <span class="font-semibold text-slate-700">Prepare lesson notes</span>
-                        <span class="text-xs text-slate-400 mt-0.5">Draft, submit &amp; track status</span>
-                    </div>
-                    <i data-lucide="file-text" class="w-4 h-4 shrink-0 text-amber-500"></i>
-                </a>
-                <a href="analytics.php"
-                   class="flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800">
-                    <div class="flex flex-col">
-                        <span class="font-semibold text-slate-700">View analytics</span>
-                        <span class="text-xs text-slate-400 mt-0.5">Performance &amp; attendance trends</span>
-                    </div>
-                    <i data-lucide="activity" class="w-4 h-4 shrink-0 text-emerald-500"></i>
-                </a>
+            <?php else: ?>
+            <div class="flex items-center gap-3 bg-emerald-50 border border-emerald-100 p-4 rounded-xl mt-4">
+                <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-600 shrink-0"></i>
+                <p class="text-sm text-emerald-700 font-medium">All student grades are currently up to date.</p>
             </div>
+            <?php endif; ?>
         </div>
 
-        <!-- Open items (overview text, data-backed hint) -->
-        <div class="bg-white border border-slate-200 rounded-xl p-5">
-            <div class="flex items-center justify-between mb-3">
-                <h2 class="text-base font-bold text-slate-800">Open items (overview)</h2>
-                <span class="text-sm text-slate-400">Based on your classes and timetable</span>
+        <!-- Teaching workspace quick actions -->
+        <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex-1">
+            <div class="flex items-center justify-between mb-5">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800">Teaching Workspace</h2>
+                    <p class="text-sm text-slate-500 mt-1">Manage your classes, students, and curriculum</p>
+                </div>
+                <div class="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center border border-indigo-100">
+                    <i data-lucide="briefcase" class="w-5 h-5 text-indigo-600"></i>
+                </div>
             </div>
-            <p class="text-sm text-slate-500 leading-relaxed">
-                You currently have <strong><?= $gradingPending ?></strong> student<?= $gradingPending === 1 ? '' : 's' ?> across your classes
-                without any recorded grade yet. Use the grading workspace to capture scores for recent tests and exams.
-            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <a href="classes.php"
+                   class="group flex flex-col p-4 rounded-xl border border-slate-200 bg-white hover:border-emerald-300 hover:shadow-md hover:bg-emerald-50/30 transition-all">
+                    <div class="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center mb-3 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                        <i data-lucide="book-open" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-base font-bold text-slate-800 mb-1 group-hover:text-emerald-700">Classes assigned to me</span>
+                    <span class="text-sm text-slate-500">View class lists, student details, and general class management.</span>
+                </a>
+                
+                <a href="timetable.php"
+                   class="group flex flex-col p-4 rounded-xl border border-slate-200 bg-white hover:border-sky-300 hover:shadow-md hover:bg-sky-50/30 transition-all">
+                    <div class="w-10 h-10 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center mb-3 group-hover:bg-sky-600 group-hover:text-white transition-colors">
+                        <i data-lucide="calendar" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-base font-bold text-slate-800 mb-1 group-hover:text-sky-700">My Timetable</span>
+                    <span class="text-sm text-slate-500">Check your upcoming classes and weekly schedule.</span>
+                </a>
+
+                <a href="attendance.php"
+                   class="group flex flex-col p-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-md hover:bg-indigo-50/30 transition-all">
+                    <div class="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center mb-3 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                        <i data-lucide="calendar-check" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-base font-bold text-slate-800 mb-1 group-hover:text-indigo-700">Student Attendance</span>
+                    <span class="text-sm text-slate-500">Mark students present, absent, or late for today's classes.</span>
+                </a>
+
+                <a href="grades.php"
+                   class="group flex flex-col p-4 rounded-xl border border-slate-200 bg-white hover:border-violet-300 hover:shadow-md hover:bg-violet-50/30 transition-all">
+                    <div class="w-10 h-10 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center mb-3 group-hover:bg-violet-600 group-hover:text-white transition-colors">
+                        <i data-lucide="clipboard-list" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-base font-bold text-slate-800 mb-1 group-hover:text-violet-700">Enter Grades</span>
+                    <span class="text-sm text-slate-500">Record scores for tests, exams, and continuous assessments.</span>
+                </a>
+
+                <a href="lesson_notes.php"
+                   class="group flex flex-col p-4 rounded-xl border border-slate-200 bg-white hover:border-amber-300 hover:shadow-md hover:bg-amber-50/30 transition-all">
+                    <div class="w-10 h-10 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center mb-3 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                        <i data-lucide="file-text" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-base font-bold text-slate-800 mb-1 group-hover:text-amber-700">Lesson Notes</span>
+                    <span class="text-sm text-slate-500">Draft, submit, and track the status of your lesson plans.</span>
+                </a>
+
+                <a href="analytics.php"
+                   class="group flex flex-col p-4 rounded-xl border border-slate-200 bg-white hover:border-rose-300 hover:shadow-md hover:bg-rose-50/30 transition-all">
+                    <div class="w-10 h-10 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center mb-3 group-hover:bg-rose-600 group-hover:text-white transition-colors">
+                        <i data-lucide="activity" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-base font-bold text-slate-800 mb-1 group-hover:text-rose-700">Class Analytics</span>
+                    <span class="text-sm text-slate-500">Review performance charts and attendance trends for your classes.</span>
+                </a>
+            </div>
         </div>
     </div>
 
     <!-- Right column: timetable, subjects, reports -->
     <div class="space-y-4">
-        <!-- Today’s timetable -->
-        <div class="bg-white border border-slate-200 rounded-xl p-5">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-base font-bold text-slate-800">Today&rsquo;s timetable</h2>
-                <a href="timetable.php" class="text-sm text-emerald-600 hover:text-emerald-700 font-medium">View full</a>
-            </div>
-            <?php if (empty($todaySchedule)): ?>
-            <p class="text-sm text-slate-500">
-                You have no scheduled periods on the timetable for today.
-            </p>
-            <?php else: ?>
-            <div class="space-y-3">
-                <?php foreach ($todaySchedule as $slot): ?>
-                <div class="flex items-center justify-between rounded-lg border border-slate-100 px-4 py-3 bg-slate-50/50">
-                    <div>
-                        <div class="font-bold text-slate-800 text-sm mb-0.5">
-                            Period <?= (int) $slot['period_order'] ?>
-                        </div>
-                        <div class="text-xs text-slate-500">
-                            <span class="font-medium text-slate-600"><?= htmlspecialchars($slot['subject_name'] ?? 'Subject') ?></span>
-                            &middot;
-                            <?= htmlspecialchars(($slot['class_name'] ?? 'Class') . (!empty($slot['class_section']) ? ' ' . $slot['class_section'] : '')) ?>
-                        </div>
-                    </div>
-                </div>
-                <?php endforeach; ?>
-            </div>
-            <?php endif; ?>
-        </div>
+        <!-- No longer showing timetable here per requirements -->
 
         <!-- Subjects quick summary -->
         <div class="bg-white border border-slate-200 rounded-xl p-5">
